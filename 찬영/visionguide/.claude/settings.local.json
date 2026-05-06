@@ -16,7 +16,19 @@
       "Bash(curl -s http://localhost:8000/camera/stream)",
       "Bash(conda run *)",
       "PowerShell($env:PYTHONIOENCODING='utf-8'; conda run -n min python check_routes.py 2>&1)",
-      "Bash(xcopy \"C:\\\\Users\\\\User\\\\Downloads\\\\navigation-main\\\\navigation-main\\\\준범\\\\SafeStep\" \"C:\\\\Users\\\\User\\\\github\\\\visionguide\\\\android\\\\SafeStep\" /E /I /Y)"
+      "Bash(xcopy \"C:\\\\Users\\\\User\\\\Downloads\\\\navigation-main\\\\navigation-main\\\\준범\\\\SafeStep\" \"C:\\\\Users\\\\User\\\\github\\\\visionguide\\\\android\\\\SafeStep\" /E /I /Y)",
+      "Bash(JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\" ./gradlew --no-daemon compileDebugKotlin)",
+      "Bash(python -c \"from backend.routers.safestep_router import router; from backend.services.inference_service import get_depth_status; print\\('OK', get_depth_status\\(\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from backend.routers import safestep_router; print\\('OK'\\)\")",
+      "Bash(python -c \"from backend.routers import safestep_router\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(python -V)",
+      "Bash(python -c \"import sys; print\\(sys.version\\); import backend.routers.safestep_router as m; print\\('module loaded'\\)\")",
+      "Bash(\"/c/Users/User/miniconda3/envs/visionguide/python.exe\" -c \"from backend.routers import safestep_router; from backend.services.inference_service import get_depth_status; print\\('OK', get_depth_status\\(\\)\\)\")",
+      "Bash(/c/Users/User/miniconda3/envs/visionguide/python.exe -c ' *)",
+      "Bash(xxd)",
+      "Bash(xargs -I {} sh -c 'echo {}; grep -A 3 \"runCatching {\" \"C:\\\\Users\\\\User\\\\github\\\\visionguide\\\\android\\\\SafeStep\\\\app\\\\src\\\\main\\\\java\\\\com\\\\safestep\\\\app\\\\MapActivity.kt\" | head -20')"
     ]
   }
 }

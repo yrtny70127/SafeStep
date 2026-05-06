@@ -78,6 +78,30 @@
         }
         .tab-btn:hover { color: var(--fg); }
         .tab-btn.active { color: var(--fg); border-bottom-color: var(--accent); }
+
+        /* 슬롯 토글 (서버1 / 서버2) */
+        .slot-toggle { display: flex; gap: 8px; margin-right: 12px; }
+        .slot-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; font-family: var(--font-mono); font-size: 11px;
+            letter-spacing: 0.06em; text-transform: uppercase;
+            background: rgba(255,255,255,0.03); color: var(--fg-mute);
+            border: 1px solid var(--line); border-radius: 6px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .slot-btn:hover { color: var(--fg); border-color: var(--fg-mute); }
+        .slot-btn.active {
+            color: var(--fg); border-color: var(--accent);
+            background: rgba(255,242,0,0.08);
+        }
+        .slot-dot {
+            width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+        }
+        .slot-dot[data-state="active"] { background: var(--ok); box-shadow: 0 0 6px rgba(48,209,88,0.6); }
+        .slot-dot[data-state="empty"]  { background: rgba(255,255,255,0.18); }
+        .slot-status { font-size: 10px; opacity: 0.7; margin-left: 4px; }
+        .live-img-slot { max-width: 100%; max-height: 100%; }
+
         .preview-badge {
             font-family: var(--font-mono); font-size: 11px; padding: 3px 10px;
             border-radius: 4px; background: rgba(255,242,0,0.12); color: var(--accent); margin-right: 16px;
@@ -95,7 +119,7 @@
         .tab-view.hidden { display: none; }
         .tab-view img { width: 100%; height: 100%; object-fit: contain; display: block; }
         .tab-view canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
-        #live-img { max-width: 100%; max-height: 100%; display: none; object-fit: contain; }
+        .live-img-slot { max-width: 100%; max-height: 100%; display: none; object-fit: contain; }
         #canvas-overlay-live { position: absolute; inset: 0; pointer-events: none; display: none; }
 
         .preview-empty {
@@ -295,6 +319,10 @@
                 <span class="tts-indicator" id="depth-dot"></span>
                 <span id="depth-label">Depth on</span>
             </button>
+            <button class="tts-pill" id="capture-toggle" onclick="toggleCapture()" title="원본 프레임 + 라벨을 학습용으로 저장">
+                <span class="tts-indicator off" id="capture-dot"></span>
+                <span id="capture-label">데이터 수집 off</span>
+            </button>
             <button class="tts-pill" id="ollama-toggle" onclick="toggleOllama()">
                 <span class="tts-indicator off" id="ollama-dot"></span>
                 <span id="ollama-label">Ollama off</span>
@@ -317,6 +345,16 @@
                     <button class="tab-btn active" id="tab-live">라이브 카메라</button>
                     <button class="tab-btn"        id="tab-video">영상 / 사진 분석</button>
                 </div>
+                <div class="slot-toggle" id="slot-toggle">
+                    <button class="slot-btn active" id="slot-btn-1" data-slot="1">
+                        <span class="slot-dot" data-state="empty"></span>
+                        서버1 <span class="slot-status" id="slot-status-1">비어있음</span>
+                    </button>
+                    <button class="slot-btn" id="slot-btn-2" data-slot="2">
+                        <span class="slot-dot" data-state="empty"></span>
+                        서버2 <span class="slot-status" id="slot-status-2">비어있음</span>
+                    </button>
+                </div>
                 <span class="preview-badge" id="phone-badge">대기 중</span>
             </div>
 
@@ -326,9 +364,11 @@
                     <div class="preview-empty" id="live-empty">
                         <div class="pulse"></div>
                         <p>핸드폰에서 <strong>카메라 모드</strong>를 시작하면<br>자동으로 여기에 표시됩니다</p>
-                        <p class="hint">waiting for phone...</p>
+                        <p class="hint" id="live-hint">waiting for phone...</p>
                     </div>
-                    <img id="live-img" src="/camera/stream" style="display:none;">
+                    <!-- 슬롯별 MJPEG 스트림 (선택된 것만 표시) -->
+                    <img id="live-img-1" class="live-img-slot" src="/camera/stream/1" data-slot="1" style="display:none;">
+                    <img id="live-img-2" class="live-img-slot" src="/camera/stream/2" data-slot="2" style="display:none;">
                     <canvas id="canvas-overlay-live"></canvas>
                 </div>
 
@@ -569,6 +609,35 @@
                 </div>
             </div>
 
+            <!-- 학습 데이터 수집 (장애물 분석 아래) -->
+            <div class="info-card" id="capture-card">
+                <div class="info-card-header" onclick="toggleCard('capture-card')">
+                    <h3>데이터 수집 <span style="font-size:11px; color:var(--fg-mute); font-weight:normal;">5초/장</span></h3>
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="info-card-body">
+                    <div style="padding: 6px 0; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">상태</span>
+                            <span id="capture-card-status" style="font-family:var(--font-mono);">대기</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">저장</span>
+                            <span id="capture-card-count" style="font-family:var(--font-mono);">0장</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">용량</span>
+                            <span id="capture-card-size" style="font-family:var(--font-mono);">0 / 5120 MB</span>
+                        </div>
+                        <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
+                            <div id="capture-card-bar" style="height:100%; width:0%; background:var(--accent); transition:width 0.3s;"></div>
+                        </div>
+                        <div style="font-size:10px; color:var(--fg-mute); font-family:var(--font-mono); word-break:break-all;"
+                             id="capture-card-folder">data/captures/</div>
+                    </div>
+                </div>
+            </div>
+
         </aside>
     </div>
 
@@ -585,6 +654,53 @@
             document.getElementById('depth-dot').classList.toggle('off', !on);
             document.getElementById('depth-label').textContent = on ? 'Depth on' : 'Depth off';
         }
+
+        // ── 학습 데이터 캡처 토글 / 상태 폴링 ─────────────────────────
+        async function toggleCapture() {
+            const res = await fetch('/capture/toggle', { method: 'POST' });
+            const data = await res.json();
+            applyCaptureStatus(data);
+        }
+
+        function applyCaptureStatus(s) {
+            const on = s.enabled && !s.auto_disabled;
+            document.getElementById('capture-dot').classList.toggle('off', !on);
+            const dot = document.getElementById('capture-dot');
+            const lbl = document.getElementById('capture-label');
+            if (s.auto_disabled) {
+                lbl.textContent = '데이터 수집 디스크꽉참';
+                dot.style.background = 'var(--bad, #ff453a)';
+            } else if (on) {
+                lbl.textContent = `데이터 수집 on · ${s.total_count}장 (${s.total_mb}MB)`;
+                dot.style.background = '';
+            } else {
+                lbl.textContent = '데이터 수집 off';
+                dot.style.background = '';
+            }
+            // 사이드바 카드 업데이트 (있을 때만)
+            const card = document.getElementById('capture-card');
+            if (card) {
+                document.getElementById('capture-card-status').textContent =
+                    s.auto_disabled ? '디스크 한도 도달 (자동 OFF)' : (on ? '저장 중' : '대기');
+                document.getElementById('capture-card-count').textContent = `${s.total_count}장`;
+                document.getElementById('capture-card-size').textContent =
+                    `${s.total_mb} / ${s.limit_mb} MB`;
+                document.getElementById('capture-card-folder').textContent = s.folder;
+                const pct = Math.min(100, (s.total_mb / s.limit_mb) * 100);
+                document.getElementById('capture-card-bar').style.width = pct + '%';
+            }
+        }
+
+        async function pollCaptureStatus() {
+            try {
+                const r = await fetch('/capture/status');
+                if (!r.ok) return;
+                const s = await r.json();
+                applyCaptureStatus(s);
+            } catch (e) { /* ignore */ }
+        }
+        setInterval(pollCaptureStatus, 5_000);
+        pollCaptureStatus();
 
         async function toggleOllama() {
             const res = await fetch('/ollama-toggle', { method: 'POST' });
@@ -717,7 +833,7 @@
                 if (captureFrameCount % 2 === 0) {
                     const form2 = new FormData();
                     form2.append('file', new File([blob], 'frame.jpg', { type: 'image/jpeg' }));
-                    fetch('/segment', { method: 'POST', body: form2 })
+                    fetch('/segment?include_mask=1', { method: 'POST', body: form2 })
                         .then(r => r.json())
                         .then(seg => {
                             if (!seg.mask_b64) return;
@@ -767,7 +883,12 @@
             videoView:         document.getElementById('video-view'),
             liveEmpty:         document.getElementById('live-empty'),
             videoEmpty:        document.getElementById('video-empty'),
-            liveImg:           document.getElementById('live-img'),
+            liveImg1:          document.getElementById('live-img-1'),
+            liveImg2:          document.getElementById('live-img-2'),
+            slotBtn1:          document.getElementById('slot-btn-1'),
+            slotBtn2:          document.getElementById('slot-btn-2'),
+            slotStatus1:       document.getElementById('slot-status-1'),
+            slotStatus2:       document.getElementById('slot-status-2'),
             canvasOverlayLive: document.getElementById('canvas-overlay-live'),
             canvasVideo:       document.getElementById('canvas-video'),
             videoPanel:        document.getElementById('video-panel'),
@@ -861,6 +982,9 @@
             el.liveView.classList.toggle('hidden', isVideo);
             el.videoView.classList.toggle('hidden', !isVideo);
             el.videoPanel.classList.toggle('active', isVideo);
+            // 슬롯 토글(서버1/서버2)은 라이브 탭에서만 표시
+            const slotToggle = document.getElementById('slot-toggle');
+            if (slotToggle) slotToggle.style.display = isVideo ? 'none' : '';
             const st = isVideo ? videoState : liveState;
             setResultMsg(st.message, st.detail);
             updateAnalysis(st.analysis);  // 해당 탭의 분석 결과로 복원
@@ -1096,15 +1220,23 @@
             }
         }
 
-        // 라이브 오버레이 데이터 (base는 MJPEG img가 담당)
-        let liveOverlayData = null; // { clsMaskImgs, obstacle_items, img_width, img_height }
+        // 라이브 오버레이 데이터 (슬롯별)
+        const liveOverlayBySlot = { 1: null, 2: null };
+        let activeSlot = 1;
+        const slotState = { 1: { active: false, frameCount: 0 }, 2: { active: false, frameCount: 0 } };
+
+        function activeLiveImg() {
+            return activeSlot === 2 ? el.liveImg2 : el.liveImg1;
+        }
 
         function applyLiveFrame(msg) {
+            const slot = msg.slot || activeSlot;
+            slotState[slot].frameCount++;
+            if (slot !== activeSlot) return;
             el.liveEmpty.classList.add('hidden');
-            el.liveImg.style.display = 'block';
+            activeLiveImg().style.display = 'block';
             el.canvasOverlayLive.style.display = 'block';
-            liveState.frameCount++;
-            el.phoneBadge.textContent = `수신 중 · ${liveState.frameCount}`;
+            el.phoneBadge.textContent = `서버${slot} · ${slotState[slot].frameCount}`;
             el.phoneBadge.style.background = 'rgba(48,209,88,0.15)';
             el.phoneBadge.style.color = 'var(--ok)';
         }
@@ -1113,29 +1245,59 @@
             // 영상/사진 탭 캡처 중 서버가 보낸 frame_overlay → 라이브 탭에 간섭 방지
             if (activeTab !== 'live') return;
 
+            const slot = msg.slot || 1;
+            slotState[slot].frameCount++;
+
+            // 다른 슬롯 데이터는 캐싱만 하고 화면 갱신은 안 함
+            if (slot !== activeSlot) {
+                const clsMaskImgs = {};
+                await Promise.all(Object.entries(msg.surface_masks || {}).map(([cls, src]) =>
+                    loadImage(src).then(img => { clsMaskImgs[cls] = img; }).catch(() => {})
+                ));
+                liveOverlayBySlot[slot] = {
+                    clsMaskImgs,
+                    obstacle_items: msg.obstacle_items || [],
+                    img_width: msg.img_width || 0,
+                    img_height: msg.img_height || 0,
+                    message: msg.message || '',
+                    detail: msg.detail || {},
+                    analysis: msg.analysis || {},
+                };
+                return;
+            }
+
             // 첫 overlay 수신 시 MJPEG img 표시
             el.liveEmpty.classList.add('hidden');
-            el.liveImg.style.display = 'block';
+            activeLiveImg().style.display = 'block';
             el.canvasOverlayLive.style.display = 'block';
 
             const clsMaskImgs = {};
             await Promise.all(Object.entries(msg.surface_masks || {}).map(([cls, src]) =>
                 loadImage(src).then(img => { clsMaskImgs[cls] = img; }).catch(() => {})
             ));
-            liveOverlayData = {
+            liveOverlayBySlot[slot] = {
                 clsMaskImgs,
                 obstacle_items: msg.obstacle_items || [],
                 img_width: msg.img_width || 0,
                 img_height: msg.img_height || 0,
+                message: msg.message || '',
+                detail: msg.detail || {},
+                analysis: msg.analysis || {},
             };
             redrawLiveOverlay();
-            liveState.message  = msg.message  || liveState.message;
-            liveState.detail   = msg.detail   || liveState.detail;
-            liveState.analysis = msg.analysis || liveState.analysis;
+            const cur = liveOverlayBySlot[activeSlot];
+            if (cur) {
+                liveState.message  = cur.message  || liveState.message;
+                liveState.detail   = cur.detail   || liveState.detail;
+                liveState.analysis = cur.analysis || liveState.analysis;
+            }
             if (activeTab === 'live') {
                 updateAnalysis(liveState.analysis);
                 setResultMsg(liveState.message, liveState.detail);
             }
+            el.phoneBadge.textContent = `서버${slot} · ${slotState[slot].frameCount}`;
+            el.phoneBadge.style.background = 'rgba(48,209,88,0.15)';
+            el.phoneBadge.style.color = 'var(--ok)';
         }
 
         function getLetterboxRect(cw, ch, imgW, imgH) {
@@ -1152,7 +1314,13 @@
         }
 
         function redrawLiveOverlay() {
-            if (!liveOverlayData) return;
+            const data = liveOverlayBySlot[activeSlot];
+            if (!data) {
+                // 활성 슬롯 데이터 없음 → 캔버스 비우기
+                const canvas = el.canvasOverlayLive;
+                if (canvas.getContext) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
             const canvas = el.canvasOverlayLive;
             const container = el.liveView;
             const cw = container.clientWidth;
@@ -1162,25 +1330,84 @@
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, cw, ch);
 
-            const { img_width: imgW, img_height: imgH } = liveOverlayData;
+            const { img_width: imgW, img_height: imgH } = data;
             const rect = getLetterboxRect(cw, ch, imgW, imgH);
 
-            // 노면 마스크
-            for (const [cls, maskImg] of Object.entries(liveOverlayData.clsMaskImgs)) {
+            for (const [cls, maskImg] of Object.entries(data.clsMaskImgs)) {
                 if (isSurfClsVisible(cls)) {
                     ctx.drawImage(maskImg, rect.x, rect.y, rect.w, rect.h);
                 }
             }
-
-            // 장애물 박스 (scaled)
             const sx = rect.w / (imgW || rect.w);
             const sy = rect.h / (imgH || rect.h);
-            for (const item of liveOverlayData.obstacle_items) {
+            for (const item of data.obstacle_items) {
                 if (isObsItemVisible(item)) {
                     drawObsBoxScaled(ctx, item, sx, sy, rect.x, rect.y);
                 }
             }
         }
+
+        // ── 슬롯 토글 + 상태 폴링 ─────────────────────────────────────────
+        function switchSlot(slot) {
+            if (slot !== 1 && slot !== 2) return;
+            activeSlot = slot;
+            el.slotBtn1.classList.toggle('active', slot === 1);
+            el.slotBtn2.classList.toggle('active', slot === 2);
+            el.liveImg1.style.display = (slot === 1 && slotState[1].active) ? 'block' : 'none';
+            el.liveImg2.style.display = (slot === 2 && slotState[2].active) ? 'block' : 'none';
+
+            const cur = liveOverlayBySlot[slot];
+            if (cur) {
+                liveState.message  = cur.message  || '';
+                liveState.detail   = cur.detail   || {};
+                liveState.analysis = cur.analysis || {};
+                if (activeTab === 'live') {
+                    updateAnalysis(liveState.analysis);
+                    setResultMsg(liveState.message, liveState.detail);
+                }
+                el.liveEmpty.classList.add('hidden');
+                el.canvasOverlayLive.style.display = 'block';
+            } else if (!slotState[slot].active) {
+                el.liveEmpty.classList.remove('hidden');
+                el.canvasOverlayLive.style.display = 'none';
+            }
+            redrawLiveOverlay();
+        }
+        el.slotBtn1.addEventListener('click', () => switchSlot(1));
+        el.slotBtn2.addEventListener('click', () => switchSlot(2));
+
+        async function pollSlotStatus() {
+            try {
+                const r = await fetch('/camera/slots');
+                if (!r.ok) return;
+                const data = await r.json();
+                for (const s of data.slots || []) {
+                    const slot = s.slot;
+                    const wasActive = slotState[slot].active;
+                    slotState[slot].active = !!s.active;
+                    const dot = document.querySelector(`#slot-btn-${slot} .slot-dot`);
+                    if (dot) dot.dataset.state = s.active ? 'active' : 'empty';
+                    const status = slot === 1 ? el.slotStatus1 : el.slotStatus2;
+                    if (status) status.textContent = s.active ? '연결됨' : '비어있음';
+
+                    // 슬롯이 비워졌으면 해당 슬롯 캐시·이미지 정리
+                    if (wasActive && !s.active) {
+                        liveOverlayBySlot[slot] = null;
+                        slotState[slot].frameCount = 0;
+                        if (slot === activeSlot) {
+                            el.liveEmpty.classList.remove('hidden');
+                            activeLiveImg().style.display = 'none';
+                            el.canvasOverlayLive.style.display = 'none';
+                            el.phoneBadge.textContent = '대기 중';
+                            el.phoneBadge.style.background = 'rgba(255,242,0,0.12)';
+                            el.phoneBadge.style.color = 'var(--accent)';
+                        }
+                    }
+                }
+            } catch (e) { /* 무시 */ }
+        }
+        setInterval(pollSlotStatus, 2_000);
+        pollSlotStatus();
 
         async function applyVideoFrame(msg) {
             // 프레임 버퍼에 저장
@@ -1265,7 +1492,7 @@
                         const form2 = new FormData();
                         form2.append('file', new File([blob], 'image.jpg', { type: 'image/jpeg' }));
                         // /segment 결과 오면 lastSegMask 갱신 후 재렌더
-                        fetch('/segment', { method: 'POST', body: form2 }).then(r => r.json()).then(seg => {
+                        fetch('/segment?include_mask=1', { method: 'POST', body: form2 }).then(r => r.json()).then(seg => {
                             if (!seg.mask_b64) return;
                             const maskImg = new Image();
                             maskImg.onload = () => { lastSegMask = maskImg; _paintLocalCanvas(); };

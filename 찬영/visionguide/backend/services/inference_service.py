@@ -40,6 +40,25 @@ _LLM_MIN_INTERVAL = 3.0   # 최소 3초 간격 (너무 자주 호출 방지)
 # Depth
 _depth_enabled = True      # 대시보드 토글로 제어 (CPU 환경에서 끄면 속도 향상)
 
+# ── 서버 부하 기반 Depth 자동 ON/OFF ─────────────────────────────────────
+_depth_auto_disabled = False           # 자동 OFF 상태 (수동 OFF와 별개)
+_depth_recent_times: list[float] = []  # 최근 추론 시간(ms) 슬라이딩 윈도우
+_DEPTH_AUTO_OFF_MS  = 250.0            # 5회 평균 250ms 초과 → OFF
+_DEPTH_AUTO_ON_MS   = 150.0            # 한 번 OFF 됐을 때 180ms 이하면 다시 시도
+_DEPTH_WINDOW       = 5
+_depth_off_until    = 0.0              # OFF 후 재시도 가능 시각 (초 단위 epoch)
+_DEPTH_RECHECK_SEC  = 60.0             # OFF 후 60초 뒤에 짧게 다시 켜봄
+
+
+def get_depth_status() -> dict:
+    """클라이언트에 보내줄 Depth 상태 (auto_off / reason)"""
+    return {
+        "enabled":      _depth_enabled and not _depth_auto_disabled,
+        "auto_off":     _depth_auto_disabled,
+        "manual_off":   not _depth_enabled,
+        "reason":       "server_overload" if _depth_auto_disabled else "",
+    }
+
 
 def set_ollama_enabled(value: bool):
     global _ollama_enabled
@@ -282,8 +301,15 @@ def _generate_guidance_llm(situation: str) -> str | None:
 
 def _estimate_depth(frame: np.ndarray) -> np.ndarray | None:
     """BGR numpy array → metric depth map (HxW, float32, 단위: 미터). 실패 시 None."""
+    global _depth_auto_disabled, _depth_off_until
     if _depth_pipe is None:
         return None
+    # ── 자동 OFF 상태에서 재시도 시각 도래 전이면 스킵 ──
+    now = time.time()
+    if _depth_auto_disabled and now < _depth_off_until:
+        return None
+
+    t0 = time.time()
     try:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(rgb)
@@ -293,6 +319,23 @@ def _estimate_depth(frame: np.ndarray) -> np.ndarray | None:
         h, w = frame.shape[:2]
         if depth.shape != (h, w):
             depth = cv2.resize(depth, (w, h), interpolation=cv2.INTER_LINEAR)
+
+        # ── 추론 시간 추적 + 자동 ON/OFF 판정 ──
+        elapsed_ms = (time.time() - t0) * 1000.0
+        _depth_recent_times.append(elapsed_ms)
+        if len(_depth_recent_times) > _DEPTH_WINDOW:
+            _depth_recent_times.pop(0)
+        if len(_depth_recent_times) == _DEPTH_WINDOW:
+            avg = sum(_depth_recent_times) / _DEPTH_WINDOW
+            if not _depth_auto_disabled and avg > _DEPTH_AUTO_OFF_MS:
+                _depth_auto_disabled = True
+                _depth_off_until = now + _DEPTH_RECHECK_SEC
+                logger.warning(f"[Depth 자동 OFF] 평균 {avg:.0f}ms > {_DEPTH_AUTO_OFF_MS}ms")
+            elif _depth_auto_disabled and avg < _DEPTH_AUTO_ON_MS:
+                _depth_auto_disabled = False
+                _depth_recent_times.clear()
+                logger.info(f"[Depth 자동 ON] 평균 {avg:.0f}ms < {_DEPTH_AUTO_ON_MS}ms")
+
         return depth * DEPTH_SCALE
     except Exception as e:
         logger.warning(f"깊이 추정 실패: {e}")
@@ -861,4 +904,5 @@ def analyze_frame(image_bytes: bytes) -> dict:
         "obstacle_items": obs_items,
         "img_width": w,
         "img_height": h,
+        "depth_status": get_depth_status(),
     }

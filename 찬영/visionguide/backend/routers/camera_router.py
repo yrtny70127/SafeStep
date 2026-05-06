@@ -18,9 +18,10 @@ from backend.services.inference_service import shared_executor
 
 _inference_running = False
 
-# MJPEG 스트리밍용 전역 버퍼
-_latest_jpeg: bytes = b""
-_frame_counter: int = 0
+# ── 슬롯별 MJPEG 스트리밍 버퍼 (서버1, 서버2) ──────────────────────────
+SLOTS = (1, 2)
+_latest_jpeg: dict[int, bytes] = {s: b"" for s in SLOTS}
+_frame_counter: dict[int, int] = {s: 0 for s in SLOTS}
 
 
 logger = get_logger(__name__)
@@ -69,36 +70,73 @@ class DashboardManager:
 dashboard_manager = DashboardManager()
 
 
-def update_latest_frame(jpeg_bytes: bytes):
-    """SafeStep /detect 등 REST 엔드포인트에서 프레임을 업데이트할 때 호출."""
-    global _latest_jpeg, _frame_counter
-    _latest_jpeg = jpeg_bytes
-    _frame_counter += 1
+def update_latest_frame(jpeg_bytes: bytes, slot: int = 1):
+    """SafeStep /detect 등 REST 엔드포인트에서 슬롯별 프레임을 업데이트."""
+    if slot not in _latest_jpeg:
+        return
+    _latest_jpeg[slot] = jpeg_bytes
+    _frame_counter[slot] += 1
+
+
+def clear_slot_frame(slot: int):
+    """세션 만료 시 슬롯의 프레임 버퍼를 비워서 대시보드가 '비어있음' 표시"""
+    if slot not in _latest_jpeg:
+        return
+    _latest_jpeg[slot] = b""
+    _frame_counter[slot] += 1   # 카운터는 증가시켜야 스트림이 전환을 인지
 
 
 # ============================================
-# MJPEG 스트리밍 엔드포인트
+# MJPEG 스트리밍 엔드포인트 (슬롯별)
 # ============================================
-@router.get("/camera/stream")
-async def camera_mjpeg_stream():
-    """대시보드 img src로 사용하는 MJPEG 스트림."""
-    async def generate():
-        last_seen = -1
-        while True:
-            if _frame_counter != last_seen and _latest_jpeg:
-                last_seen = _frame_counter
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" +
-                    _latest_jpeg + b"\r\n"
-                )
-            await asyncio.sleep(0.02)  # 최대 50fps 폴링
+async def _mjpeg_generator(slot: int):
+    last_seen = -1
+    while True:
+        cur_jpeg = _latest_jpeg.get(slot, b"")
+        cur_count = _frame_counter.get(slot, 0)
+        if cur_count != last_seen and cur_jpeg:
+            last_seen = cur_count
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" +
+                cur_jpeg + b"\r\n"
+            )
+        await asyncio.sleep(0.02)  # 최대 50fps
 
+
+@router.get("/camera/stream/{slot}")
+async def camera_mjpeg_stream_slot(slot: int):
+    """슬롯별 MJPEG 스트림 (대시보드 img src용). slot=1 또는 2."""
+    if slot not in SLOTS:
+        slot = 1
     return StreamingResponse(
-        generate(),
+        _mjpeg_generator(slot),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+@router.get("/camera/stream")
+async def camera_mjpeg_stream_default():
+    """레거시 호환 — slot 1로 redirect"""
+    return StreamingResponse(
+        _mjpeg_generator(1),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/camera/slots")
+async def camera_slots_status():
+    """대시보드 폴링용 — 각 슬롯의 사용 여부와 client_id 반환."""
+    from backend.routers.safestep_router import get_active_slots
+    active = get_active_slots()
+    return {
+        "slots": [
+            {"slot": s, "active": s in active, "client_id": active.get(s, "")}
+            for s in SLOTS
+        ]
+    }
 
 
 # ============================================
@@ -141,8 +179,6 @@ async def _run_live_inference(frame_id: int, image_bytes: bytes):
 # ============================================
 @router.websocket("/ws/camera")
 async def camera_websocket(websocket: WebSocket):
-    global _latest_jpeg, _frame_counter
-
     await websocket.accept()
     client = f"{websocket.client.host}:{websocket.client.port}"
     logger.info(f"카메라 연결: {client}")
@@ -164,8 +200,8 @@ async def camera_websocket(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "이미지 디코딩 실패"})
                 continue
             frame_count += 1
-            _latest_jpeg = image_bytes
-            _frame_counter += 1
+            # 레거시 WS 경로 — 슬롯 1로 라우팅
+            update_latest_frame(image_bytes, slot=1)
             kb = len(image_bytes) / 1024
             logger.info(f"AI 프레임 #{frame_count} | {kb:.1f} KB")
             await websocket.send_json({

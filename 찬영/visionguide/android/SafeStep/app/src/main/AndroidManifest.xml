@@ -46,11 +46,6 @@
             android:name=".VideoTestActivity"
             android:exported="false" />
 
-        <!-- 구 카메라 전용 화면 (참조용 유지) -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="false" />
-
     </application>
 
 </manifest>

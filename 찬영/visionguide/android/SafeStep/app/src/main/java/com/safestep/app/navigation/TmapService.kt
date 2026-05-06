@@ -92,6 +92,43 @@ object TmapService {
         }
     }
 
+    // ── 가까운 정류장 검색 (대중교통 안내용) ─────────────────────────────────
+    // T맵 POI 검색은 키워드 + 중심 좌표 + 반경 지원. 가장 가까운 1개를 돌려준다.
+    fun searchNearestTransit(
+        centerLat: Double, centerLon: Double,
+        keyword: String = "버스정류장",
+        radiusM: Int = 500,
+        onResult: (PoiResult?) -> Unit
+    ) {
+        Thread {
+            try {
+                val encoded = java.net.URLEncoder.encode(keyword, "UTF-8")
+                val url = "$BASE/pois?version=1&searchKeyword=$encoded" +
+                        "&centerLat=$centerLat&centerLon=$centerLon&radius=${radiusM / 1000}" +
+                        "&resCoordType=WGS84GEO&reqCoordType=WGS84GEO&count=10&appKey=$API_KEY"
+                val req = Request.Builder().url(url).get().build()
+                val body = client.newCall(req).execute().body?.string() ?: ""
+                val pois = parsePoi(body)
+                // 가장 가까운 1개 (해버사인 거리)
+                val nearest = pois.minByOrNull { distM(centerLat, centerLon, it.lat, it.lon) }
+                main.post { onResult(nearest) }
+            } catch (e: Exception) {
+                Log.e(TAG, "정류장 검색 실패", e)
+                main.post { onResult(null) }
+            }
+        }.start()
+    }
+
+    private fun distM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).let { it * it } +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2).let { it * it }
+        return 2 * r * Math.asin(Math.sqrt(a))
+    }
+
     // ── 도보 경로 탐색 ──────────────────────────────────────────────────────────
 
     fun searchPedestrianRoute(

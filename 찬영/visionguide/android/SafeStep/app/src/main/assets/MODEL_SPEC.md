@@ -64,7 +64,7 @@ shape: [1, N, 5 + num_classes]
 - `person`, `car`, `truck`, `bus`, `bicycle`, `motorcycle`
 - `chair`, `pole`, `tree`, `stairs`, `door`, `wall`
 
-`MainActivity.kt` 의 `labelToKorean()` 에서 한국어 매핑한다. 새 클래스 추가하면 거기에도 한 줄 추가하면 됨.
+한국어 매핑/그룹 분류는 서버(`backend/services/inference_service.py` 의 `OBSTACLE_CLASS_TO_GROUP`)에서 수행한다. 새 클래스 추가하면 거기에 한 줄 추가하면 됨.
 
 ## 체크리스트 (모델 인계 시)
 

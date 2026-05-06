@@ -12,7 +12,6 @@ import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.view.View
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.VideoView
@@ -42,11 +41,9 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var detector: ObjectDetector
     private var remoteDetector: RemoteDetector? = null  // 캐스팅 캐시
     private lateinit var segClient: SegmentationClient
-    private lateinit var segmentOverlay: ImageView
     private var vibrator: Vibrator? = null
     @Volatile private var frameCount = 0
     @Volatile private var lastSurfaceStatus = ""
-    @Volatile private var lastSurfaceSpeakMs = 0L
 
     // ── 프레임 추출 타이머 ─────────────────────────────────────────────────────
     private val frameHandler = Handler(Looper.getMainLooper())
@@ -58,36 +55,43 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     @Volatile private var depthNullStreak = 0
     @Volatile private var depthUnavailSpoken = false
 
-    // ── 차도/자전거도로 5초 반복 안내 ─────────────────────────────────────────
-    private val roadRepeatHandler = Handler(Looper.getMainLooper())
-    @Volatile private var isRoadRepeatRunning = false
+    // ── 진동 / 차도 반복 컨트롤러 (GuideHelper.kt) ─────────────────────────
+    private lateinit var vibCtrl:  VibrationController
+    private lateinit var roadCtrl: RoadRepeatController
 
     // ── 신호등 색상 (횡단보도) ────────────────────────────────────────────────
-    @Volatile private var lastTrafficLightColor = ""
+    // "unset": 횡단보도 미진입 or 초기값 / "": 신호 인식 불가 / "red"/"green": 신호
+    @Volatile private var lastTrafficLightColor = "unset"
 
     // ── 차량 근접 여부 (횡단보도 "건너셔도 됩니다" 판단용) ──────────────────
     @Volatile private var hasNearbyVehicle = false
-
-    // ── 탐지 상태 ──────────────────────────────────────────────────────────────
-    @Volatile private var lastSpoken = ""
-    @Volatile private var lastSpeakMs = 0L
 
     // ── 거리 기반 음성 쿨다운 ─────────────────────────────────────────────────
     @Volatile private var alert5mFired = false
     @Volatile private var alert1mFired = false
     @Volatile private var lastTrackedLabel = ""
+    // 1m 긴급: 같은 라벨 3초 쿨다운 (명세 1순위)
+    @Volatile private var lastUrgentLabel  = ""
+    @Volatile private var lastUrgentSpokeMs = 0L
+    private val URGENT_COOLDOWN_MS = 3_000L
+    // 5m 진입: 라벨이 5m 밖으로 나갔다 들어와야 재발화
+    private val labels5mFired = mutableSetOf<String>()
 
     companion object {
         private const val FRAME_INTERVAL_MS = 500L  // 탐지 간격 (ms)
-        private const val DANGER_AREA       = 0.20f
-        private const val VERY_CLOSE_AREA   = 0.40f
-        private const val SPEAK_COOLDOWN_MS = 2500L
         // 경고 그룹 분류 (Detection.label = 한국어 그룹명)
         private val FULL_ALERT_GROUPS   = setOf("차량", "개인이동장치") // 5m 음성+진동 + 1m 긴급
         private val PERSON_ALERT_GROUPS = setOf("사람/동물")            // 1m 긴급 음성만
         private val CLOSE_ALERT_GROUPS  = setOf("고정장애물")           // 1m 긴급 음성만
         private val SIGNAL_ALERT_GROUPS = setOf("신호등/표지판")        // 1m 진동만
-        // 기타 → 알림 없음
+        // 위험도 점수 그룹 가중치
+        private val GROUP_WEIGHT = mapOf(
+            "차량"          to 1.0f,
+            "개인이동장치"  to 0.9f,
+            "사람/동물"     to 0.7f,
+            "고정장애물"    to 0.5f,
+            "신호등/표지판" to 0.3f,
+        )
     }
 
     // ── 동영상 선택 런처 ──────────────────────────────────────────────────────
@@ -118,9 +122,10 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         detector       = ObjectDetector.create(this)
         remoteDetector = detector as? RemoteDetector
         segClient    = SegmentationClient(RemoteDetector.SERVER_URL)
-        segmentOverlay = findViewById(R.id.segmentOverlay)
         @Suppress("DEPRECATION")
         vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
+        vibCtrl  = VibrationController(vibrator)
+        roadCtrl = RoadRepeatController(tts, Handler(Looper.getMainLooper()))
 
         setupButtons()
         setupVideoView()
@@ -133,10 +138,11 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         stopFrameDetection()
-        stopRoadRepeat()
+        roadCtrl.stop()
         retriever?.release()
         tts.shutdown()
         runCatching { detector.close() }
+        runCatching { segClient.close() }   // OkHttp 풀 정리
         super.onDestroy()
     }
 
@@ -243,13 +249,26 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 )
 
                 if (bitmap != null) {
-                    val detections    = detector.detect(bitmap, 0)
+                    // 한 번만 JPEG 압축 → detect/segment 공유 (서버 캐시 명중)
+                    val rd = remoteDetector
+                    val sharedJpeg: ByteArray? = if (rd != null) {
+                        val out = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG,
+                            RemoteDetector.JPEG_QUALITY, out)
+                        out.toByteArray()
+                    } else null
+
+                    val detections    = if (sharedJpeg != null) rd!!.detectJpeg(sharedJpeg)
+                                        else detector.detect(bitmap, 0)
                     val serverMessage = remoteDetector?.lastMessage ?: ""
                     val dodgeDir      = remoteDetector?.lastDodge ?: "정면"
 
                     // 세그멘테이션 (2프레임마다)
                     frameCount++
-                    val seg = if (frameCount % 2 == 0) segClient.segment(bitmap, 0) else null
+                    val seg = if (frameCount % 2 == 0) {
+                        if (sharedJpeg != null) segClient.segmentJpeg(sharedJpeg)
+                        else segClient.segment(bitmap, 0)
+                    } else null
 
                     runOnUiThread {
                         handleDetections(detections, serverMessage, dodgeDir)
@@ -305,31 +324,39 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         hasNearbyVehicle = alertCandidates.any { it.label in FULL_ALERT_GROUPS }
 
-        val worst = alertCandidates.maxByOrNull { d ->
-            val cw = 1f - kotlin.math.abs(d.centerX() - 0.5f)
-            d.area() * (0.7f + 0.3f * cw) * d.confidence
-        } ?: run {
-            // 경고 대상 없음 → 상태 초기화
-            alert5mFired = false
-            alert1mFired = false
-            lastTrackedLabel = ""
+        // 5m 이내(또는 depth 모를 때 모두) 후보만 추림
+        val nearby = alertCandidates.filter { it.depthM == null || it.depthM <= 5f }
+        if (nearby.isEmpty()) {
+            alert5mFired = false; alert1mFired = false; lastTrackedLabel = ""
+            labels5mFired.clear()
             return
         }
+        val nearbyLabels = nearby.map { it.label }.toSet()
+        labels5mFired.retainAll(nearbyLabels)
+
+        // 위험도 점수 = 면적 × 중심 가까움 × 신뢰도 × 그룹 가중치
+        val worst = nearby.maxByOrNull { d ->
+            val cw = 1f - kotlin.math.abs(d.centerX() - 0.5f)
+            val gw = GROUP_WEIGHT[d.label] ?: 0.5f
+            d.area() * (0.7f + 0.3f * cw) * d.confidence * gw
+        } ?: return
 
         val depthM = worst.depthM
         val group  = worst.label
 
-        // 5m 이상이면 무시
-        if (depthM != null && depthM > 5f) return
+        // 다객체 분석
+        val under1m = nearby.filter { it.depthM != null && it.depthM <= 1f }
+        val under5m = nearby.filter { it.depthM != null && it.depthM in 1f..5f }
+        val sameGroupCount = nearby.count { it.label == group }
+        val multipleSameGroup = sameGroupCount >= 3
+        val multipleUnder1m   = under1m.size >= 2
+        val multipleUnder5m   = under5m.size >= 2
 
-        // 새로운 장애물이면 쿨다운 초기화
         if (worst.label != lastTrackedLabel) {
-            alert5mFired  = false
-            alert1mFired  = false
+            alert5mFired = false; alert1mFired = false
             lastTrackedLabel = worst.label
         }
 
-        // 진동 세기 결정
         val amplitude = when {
             depthM == null -> 180
             depthM <= 1f   -> 255
@@ -337,62 +364,56 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             else           -> 100
         }
 
-        // ── 신호등/표지판: 1m 진동만 ──
+        // 신호등/표지판: 1m 진동만
         if (group in SIGNAL_ALERT_GROUPS) {
-            if (depthM != null && depthM <= 1f) vibrateForDirection(dodgeDir, amplitude)
+            if (depthM != null && depthM <= 1f) vibCtrl.vibrate(dodgeDir, amplitude)
             return
         }
 
-        // ── 사람/동물: 1m 긴급 음성만, 그 외 없음 ──
-        if (group in PERSON_ALERT_GROUPS) {
-            if (depthM != null && depthM <= 1f && !alert1mFired) {
-                alert1mFired = true
-                val msg = if (serverMessage.isNotEmpty()) serverMessage
-                          else "위험! $dodgeDir 사람 매우 가깝습니다"
-                showWarning(msg, dodgeDir, amplitude, speakNow = true)
+        // 1m 이하 긴급 (같은 라벨 3초 쿨다운)
+        if (depthM != null && depthM <= 1f) {
+            val nowMs = SystemClock.elapsedRealtime()
+            val sameLabel  = group == lastUrgentLabel
+            val cooledDown = !sameLabel || (nowMs - lastUrgentSpokeMs >= URGENT_COOLDOWN_MS)
+            if (!alert1mFired || cooledDown) {
+                alert1mFired      = true
+                lastUrgentLabel   = group
+                lastUrgentSpokeMs = nowMs
+                val noun = if (multipleSameGroup) "여러 ${groupNoun(group)}" else groupNoun(group)
+                val urgentMsg = when {
+                    serverMessage.isNotEmpty() && !multipleSameGroup -> serverMessage
+                    else -> "위험! $dodgeDir $noun"
+                }
+                showWarning(urgentMsg, dodgeDir, amplitude, speakNow = true)
+                if (multipleUnder1m) vibCtrl.vibrate(dodgeDir, 255)
+                return
             }
+            vibCtrl.vibrate(dodgeDir, amplitude)
             return
         }
 
-        // ── 고정장애물: 1m 긴급 음성만, 그 외 없음 ──
-        if (group in CLOSE_ALERT_GROUPS) {
-            if (depthM != null && depthM <= 1f && !alert1mFired) {
-                alert1mFired = true
-                val msg = if (serverMessage.isNotEmpty()) serverMessage
-                          else "위험! $dodgeDir 장애물 매우 가깝습니다"
-                showWarning(msg, dodgeDir, amplitude, speakNow = true)
-            }
-            return
-        }
+        if (group in PERSON_ALERT_GROUPS || group in CLOSE_ALERT_GROUPS) return
 
-        // ── 차량 / 개인이동장치: 5m 음성+진동 + 1m 긴급 ──
-        // 1m 이하 긴급 음성 (1번만)
-        if (depthM != null && depthM <= 1f && !alert1mFired) {
-            alert1mFired = true
-            val msg = if (serverMessage.isNotEmpty()) serverMessage
-                      else "위험! $dodgeDir ${worst.label} 매우 가깝습니다"
-            showWarning(msg, dodgeDir, amplitude, speakNow = true)
-            return
-        }
-
-        // 5m 진입 최초 음성 (1번만)
-        if (!alert5mFired) {
+        // 차량/개인이동장치 5m 음성 (라벨당 1회, 5m 밖 나갔다 들어와야 재발화)
+        if (group !in labels5mFired) {
+            labels5mFired += group
             alert5mFired = true
             val msg = when {
+                multipleUnder5m ->
+                    "여러 장애물 접근. 주의하세요"
                 depthUnavailSpoken ->
-                    "${dodgeDir}에 ${worst.label}이 있습니다"
+                    "${dodgeDir}에 ${groupNoun(group)}"
                 serverMessage.isNotEmpty() -> serverMessage
                 else -> {
                     val distStr = if (depthM != null) "${String.format("%.1f", depthM)}m " else ""
-                    "$dodgeDir $distStr${worst.label} 접근"
+                    "$dodgeDir $distStr${groupNoun(group)} 접근"
                 }
             }
             showWarning(msg, dodgeDir, amplitude, speakNow = true)
             return
         }
 
-        // 그 사이: 진동만
-        vibrateForDirection(dodgeDir, amplitude)
+        vibCtrl.vibrate(dodgeDir, amplitude)
     }
 
     private fun handleSegmentation(seg: SegmentResult) {
@@ -417,30 +438,15 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
         }
-        if (status != "crosswalk") lastTrafficLightColor = ""
+        if (status != "crosswalk") lastTrafficLightColor = "unset"
 
         val surfaceKey = if (frontCls.isNotEmpty()) frontCls else status
         if (surfaceKey == lastSurfaceStatus) return
         lastSurfaceStatus = surfaceKey
 
-        stopRoadRepeat()
+        roadCtrl.stop()
 
-        val message = when {
-            frontCls == "sidewalk_damaged"             -> "파손된 인도입니다. 주의하세요."
-            frontCls == "braille_guide_blocks_damaged" -> "파손된 점자블록입니다. 주의하세요."
-            frontCls == "caution_zone_grating"         -> "격자 덮개입니다. 주의하세요."
-            frontCls == "caution_zone_manhole"         -> "맨홀이 있습니다. 주의하세요."
-            frontCls == "caution_zone_repair_zone"     -> "공사 구역입니다. 주의하세요."
-            frontCls == "caution_zone_stairs"          -> "계단입니다. 주의하세요."
-            frontCls == "caution_zone_tree_zone"       -> "나무 구역입니다. 주의하세요."
-            frontCls == "bike_lane"                    -> "자전거 도로입니다. 주의하세요."
-            status == "crosswalk"                      -> "횡단보도입니다. 멈추고 신호를 확인하세요."
-            status == "road"                           -> "차도입니다. 주의하세요."
-            status == "alley"                          -> "골목길입니다. 주의하세요."
-            status == "sidewalk"                       -> "인도입니다."
-            else                                       -> null
-        }
-
+        val message = surfaceMessageFor(frontCls, status)
         if (message != null) {
             val qMode = if (status == "crosswalk") TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
             tts.speak(message, qMode, null, "surface-${SystemClock.elapsedRealtime()}")
@@ -448,47 +454,7 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         if (status == "road" || frontCls == "bike_lane") {
             val situation = if (frontCls == "bike_lane") "자전거 도로입니다." else "차도입니다."
-            startRoadRepeat(situation, leftStatus, rightStatus)
-        }
-    }
-
-    private fun startRoadRepeat(situation: String, leftStatus: String, rightStatus: String) {
-        isRoadRepeatRunning = true
-        val runnable = object : Runnable {
-            override fun run() {
-                if (!isRoadRepeatRunning) return
-                val guide = buildDirectionGuide(situation, leftStatus, rightStatus)
-                tts.speak(guide, TextToSpeech.QUEUE_ADD, null, "road-repeat-${SystemClock.elapsedRealtime()}")
-                roadRepeatHandler.postDelayed(this, 5_000)
-            }
-        }
-        roadRepeatHandler.postDelayed(runnable, 5_000)
-    }
-
-    private fun stopRoadRepeat() {
-        isRoadRepeatRunning = false
-        roadRepeatHandler.removeCallbacksAndMessages(null)
-    }
-
-    private fun buildDirectionGuide(situation: String, leftStatus: String, rightStatus: String): String {
-        val leftSafe   = leftStatus == "sidewalk"
-        val rightSafe  = rightStatus == "sidewalk"
-        val leftAlley  = leftStatus == "alley"
-        val rightAlley = rightStatus == "alley"
-        val leftCross  = leftStatus == "crosswalk"
-        val rightCross = rightStatus == "crosswalk"
-        return when {
-            leftCross || rightCross -> {
-                val dir = if (leftCross) "왼쪽" else "오른쪽"
-                "$situation $dir 횡단보도 방향으로 이동하세요."
-            }
-            leftSafe && rightSafe   -> "$situation 왼쪽 또는 오른쪽 인도로 이동하세요."
-            leftSafe                -> "$situation 왼쪽 인도로 이동하세요."
-            rightSafe               -> "$situation 오른쪽 인도로 이동하세요."
-            leftAlley && rightAlley -> "$situation 왼쪽 또는 오른쪽 골목 방향으로 이동하세요."
-            leftAlley               -> "$situation 왼쪽 골목 방향으로 이동하세요."
-            rightAlley              -> "$situation 오른쪽 골목 방향으로 이동하세요."
-            else                    -> "$situation 천천히 멈추고 주변을 확인하세요."
+            roadCtrl.start(situation, leftStatus, rightStatus)
         }
     }
 
@@ -500,18 +466,8 @@ class VideoTestActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "warn-${SystemClock.elapsedRealtime()}")
         }
 
-        vibrateForDirection(side, amplitude)
+        vibCtrl.vibrate(side, amplitude)
         warningBanner.postDelayed({ warningBanner.visibility = View.GONE }, 3_000)
-    }
-
-    private fun vibrateForDirection(side: String, amplitude: Int = 180) {
-        val timings = when (side) {
-            "왼쪽"  -> longArrayOf(0, 120, 80, 120, 80, 350)
-            "오른쪽" -> longArrayOf(0, 350, 80, 120, 80, 120)
-            else    -> longArrayOf(0, 250, 80, 100, 80, 250)
-        }
-        val amplitudes = IntArray(timings.size) { i -> if (i % 2 == 0) 0 else amplitude }
-        vibrator?.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
     }
 
     // ══════════════════════════════════════════════════════════════════════════

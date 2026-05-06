@@ -126,6 +126,20 @@ https://고정도메인.ngrok-free.app/health
 
 ---
 
+## 대시보드 사용 (라이브 카메라 탭)
+
+`http://localhost:8000/dashboard`
+
+- 핸드폰 2대까지 자동으로 **서버1 / 서버2** 슬롯에 할당됨
+- 화면 우측 상단 `서버1` `서버2` 버튼으로 활성 슬롯 전환
+  - 점이 녹색 = 핸드폰 연결됨 / 회색 = 비어있음
+- 헤더의 `Depth on/off` `데이터 수집 on/off` `Ollama on/off` `음성 on/off` 토글 활용
+- **데이터 수집**을 ON으로 두면 5초당 1장씩 학습용 원본 + 라벨 JSON + 노면 마스크가 `data/captures/<날짜>/`에 저장됨 (디스크 5GB 한도 자동 관리)
+
+> 동시 접속은 최대 2명. 3번째 핸드폰이 연결을 시도하면 앱에서 "서버가 만석입니다" 음성이 나오고, 30초 동안 핸드폰 1·2 중 하나가 요청을 안 보내면 슬롯이 비워져 자동 진입됩니다.
+
+---
+
 ## 매일 실행할 때
 
 ```
@@ -136,8 +150,8 @@ https://고정도메인.ngrok-free.app/health
 ⑤ 대시보드: http://localhost:8000/dashboard
 ```
 
-> ngrok 고정 도메인을 사용하면 서버를 재시작해도 URL이 바뀌지 않습니다.  
-> URL이 바뀐 경우에만 앱 설정에서 다시 입력하면 됩니다.
+> ngrok 고정 도메인을 사용하면 서버를 재시작해도 URL이 바뀌지 않습니다.
+> URL이 바뀐 경우에만 앱 시작 시 입력 다이얼로그가 자동으로 다시 뜹니다.
 
 ---
 
@@ -166,5 +180,7 @@ New-NetFirewallRule -DisplayName "VisionGuide Server" -Direction Inbound -Protoc
 | ngrok 실행 실패 | `tools/ngrok.exe` 위치 확인, `.env` 토큰 확인 |
 | 앱에서 `/detect` 연결 실패 | 서버 실행 중인지 확인, 앱 URL 설정 확인 |
 | AI 추론이 안 됨 | `ai_models/` 안에 `.pt` 모델 파일이 있는지 확인 |
-| 분석이 매우 느림 | CPU 환경 한계. GPU + CUDA PyTorch 설치 권장 |
+| 분석이 매우 느림 + "거리 측정 일시 중단" 음성 | CPU 부하로 서버가 Depth를 자동 OFF한 상태. GPU PC에서 재실행 권장 (60초 후 자동 재시도됨) |
+| 앱에서 "서버가 만석입니다" 음성 | 다른 핸드폰 2대 연결 중. 30초 미요청이면 자동 해제됨 |
+| 대시보드 데이터 수집이 "디스크꽉참"으로 표시 | 5GB 한도 도달 + 정리 실패. `data/captures/` 수동 삭제 후 다시 ON |
 | Android 빌드 오류 (`TMAP_API_KEY`) | `android/SafeStep/local.properties` 파일 확인 |

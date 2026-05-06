@@ -27,12 +27,16 @@ class RemoteDetector : ObjectDetector {
         // 기본값: 빈 문자열 (앱 시작 시 URL 입력 요청)
         var SERVER_URL = "http://192.168.75.218:8000/detect"
 
-        /** 전송할 JPEG 압축 품질 (0~100). 낮을수록 빠르지만 정확도 저하 */
-        private const val JPEG_QUALITY = 75
+        /** 전송할 JPEG 압축 품질 (0~100). 낮을수록 빠르지만 정확도 저하.
+         *  ★ SegmentationClient.JPEG_QUALITY와 반드시 동일해야 서버측 추론 캐시(MD5 키)에 명중됨. */
+        const val JPEG_QUALITY = 70
 
         /** SharedPreferences 키 */
         const val PREF_NAME = "safestep_prefs"
         const val PREF_SERVER_URL = "server_url"
+
+        /** 이 기기의 고유 클라이언트 ID (서버 슬롯 추적용) */
+        val CLIENT_ID: String = java.util.UUID.randomUUID().toString()
     }
 
     private val client = OkHttpClient.Builder()
@@ -51,20 +55,33 @@ class RemoteDetector : ObjectDetector {
     @Volatile var isConnected: Boolean = true
         private set
 
+    /** 서버가 만석(429)으로 거절했는지 — 클라이언트가 별도 안내용으로 사용 */
+    @Volatile var isServerBusy: Boolean = false
+        private set
+
+    /** 서버가 부하로 Depth를 자동 OFF했는지 (true면 거리 정보 없음) */
+    @Volatile var depthAutoOff: Boolean = false
+        private set
+
     override fun detect(bitmap: Bitmap, rotationDegrees: Int): List<Detection> {
+        // 회전 + JPEG 압축 후 detectJpeg에 위임. 파생 비트맵 즉시 recycle (누수 방지)
+        val corrected = if (rotationDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        } else bitmap
+        val stream = ByteArrayOutputStream()
+        corrected.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)
+        if (corrected !== bitmap) corrected.recycle()
+        return detectJpeg(stream.toByteArray())
+    }
+
+    /**
+     * 이미 회전+JPEG 인코드된 바이트로 탐지.
+     * analyzeFrame에서 한 번만 압축해 detect/segment에 공유할 때 사용.
+     * (서버 추론 캐시도 같은 바이트면 명중되어 추론 1회 절감)
+     */
+    fun detectJpeg(jpegBytes: ByteArray): List<Detection> {
         return try {
-            // 1) 회전 보정 — 카메라는 보통 90도 회전된 상태로 프레임을 줌
-            val corrected = if (rotationDegrees != 0) {
-                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            } else bitmap
-
-            // 2) Bitmap → JPEG 바이트
-            val stream = ByteArrayOutputStream()
-            corrected.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)
-            val jpegBytes = stream.toByteArray()
-
-            // 2) Multipart POST 전송
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart(
@@ -75,23 +92,31 @@ class RemoteDetector : ObjectDetector {
 
             val request = Request.Builder()
                 .url(SERVER_URL)
+                .header("X-Client-Id", CLIENT_ID)
                 .post(requestBody)
                 .build()
 
             val response = client.newCall(request).execute()
+            if (response.code == 429) {
+                Log.w(TAG, "서버 만석 (429)")
+                isServerBusy = true
+                isConnected  = true   // 네트워크는 정상
+                return emptyList()
+            }
             if (!response.isSuccessful) {
                 Log.w(TAG, "서버 응답 실패: ${response.code}")
                 return emptyList()
             }
 
-            // 3) JSON 파싱 → List<Detection>
             val body = response.body?.string() ?: return emptyList()
             val root = JSONObject(body)
             lastMessage = root.optString("message", "")
             lastDodge   = root.optString("dodge", "정면")
-            isConnected = true
+            isConnected  = true
+            isServerBusy = false
+            // Depth 자동 OFF 상태 추출
+            depthAutoOff = root.optJSONObject("depth_status")?.optBoolean("auto_off", false) ?: false
             parseResponse(body)
-
         } catch (e: Exception) {
             Log.w(TAG, "서버 통신 실패: ${e.message}")
             isConnected = false
