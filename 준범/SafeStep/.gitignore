@@ -18,3 +18,7 @@ local.properties
 uploads/
 __pycache__/
 *.pyc
+
+# 환경 변수 (토큰 등 민감 정보 — 절대 커밋 금지)
+.env
+*.env

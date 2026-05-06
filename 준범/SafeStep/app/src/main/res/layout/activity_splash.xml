@@ -37,19 +37,64 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/appName" />
 
+    <!-- 서버 URL 레이블 -->
+    <TextView
+        android:id="@+id/serverUrlLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="서버 URL"
+        android:textColor="#6E6E73"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/tagline"
+        app:layout_constraintStart_toStartOf="@id/serverUrlInput"
+        app:layout_constraintEnd_toEndOf="@id/serverUrlInput" />
+
+    <!-- 서버 URL 입력 -->
+    <EditText
+        android:id="@+id/serverUrlInput"
+        android:layout_width="300dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:hint="http://x.x.x.x:5000/detect"
+        android:textColorHint="#3A3A3C"
+        android:textColor="#EEEEEE"
+        android:textSize="12sp"
+        android:singleLine="true"
+        android:inputType="textUri"
+        android:imeOptions="actionDone"
+        android:background="@null"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:contentDescription="서버 URL 입력. ngrok 또는 로컬 서버 주소를 입력하세요."
+        app:layout_constraintTop_toBottomOf="@id/serverUrlLabel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- URL 입력 구분선 -->
+    <View
+        android:id="@+id/serverUrlDivider"
+        android:layout_width="300dp"
+        android:layout_height="1dp"
+        android:background="#F97316"
+        android:alpha="0.5"
+        app:layout_constraintTop_toBottomOf="@id/serverUrlInput"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- 모드 선택 안내 -->
     <TextView
         android:id="@+id/modeLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="48dp"
+        android:layout_marginTop="24dp"
         android:text="모드를 선택하세요"
         android:textColor="#6E6E73"
         android:textSize="13sp"
         app:layout_constraintBottom_toTopOf="@id/startButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tagline" />
+        app:layout_constraintTop_toBottomOf="@id/serverUrlDivider" />
 
     <!-- 카메라 모드 버튼 -->
     <Button

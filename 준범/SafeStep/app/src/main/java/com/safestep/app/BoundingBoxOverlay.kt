@@ -76,8 +76,9 @@ class BoundingBoxOverlay @JvmOverloads constructor(
             val paint = if (det.area() >= 0.40f) dangerBoxPaint else boxPaint
             canvas.drawRoundRect(rect, 8f, 8f, paint)
 
-            // 라벨 배경 + 텍스트
-            val label    = "${det.label}  ${(det.confidence * 100).toInt()}%"
+            // 라벨 배경 + 텍스트  (예: "사람 1.2m  87%")
+            val dist  = det.distStr().let { if (it.isNotEmpty()) " $it" else "" }
+            val label = "${det.label}$dist  ${(det.confidence * 100).toInt()}%"
             val textW    = textPaint.measureText(label)
             val textH    = textPaint.textSize
             val labelTop = if (top - textH - 10f < 0) bottom else top - textH - 10f

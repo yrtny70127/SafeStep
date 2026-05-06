@@ -14,10 +14,19 @@ data class Detection(
     val label: String,
     val confidence: Float,
     val box: RectF,
+    /** Depth-Anything-V2 추정 거리 (미터). 서버 모델 비활성 시 null. */
+    val depthM: Float? = null,
+    /** 객체 그룹 ("vehicle" | "micro" | "person" | null=고정 장애물) */
+    val group: String? = null,
+    /** 접근 속도 (m/s, 양수=접근). depth 없거나 첫 프레임이면 null. */
+    val approachSpeed: Float? = null,
 ) {
-    /** 박스가 화면에서 차지하는 비율 (0..1) — 거리 추정에 사용. */
+    /** 박스가 화면에서 차지하는 비율 (0..1) — 거리 fallback용. */
     fun area(): Float = box.width().coerceAtLeast(0f) * box.height().coerceAtLeast(0f)
 
     /** 박스 가로 중심이 화면 어디에 있는지 (0..1). 0.5 가 정면. */
     fun centerX(): Float = (box.left + box.right) / 2f
+
+    /** 표시용 거리 문자열. depth 없으면 빈 문자열. */
+    fun distStr(): String = depthM?.let { "%.1fm".format(it) } ?: ""
 }

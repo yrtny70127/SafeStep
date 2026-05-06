@@ -63,6 +63,20 @@
             android:layout_height="match_parent"
             android:background="@android:color/transparent" />
 
+        <!-- 모드 선택으로 돌아가기 버튼 -->
+        <Button
+            android:id="@+id/backToModeButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="top|start"
+            android:layout_margin="8dp"
+            android:text="←"
+            android:textSize="20sp"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/btn_orange"
+            android:contentDescription="모드 선택으로 돌아가기"
+            android:padding="0dp" />
+
         <!-- 위험 경고 배너 -->
         <LinearLayout
             android:id="@+id/warningBanner"
