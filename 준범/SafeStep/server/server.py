@@ -32,6 +32,14 @@ from ultralytics import YOLO
 
 load_dotenv()   # server/.env 자동 로드
 
+# LLM 어시스턴트 라우터
+try:
+    from assistant import router as assistant_router
+    _assistant_loaded = True
+except ImportError:
+    _assistant_loaded = False
+    print('[SafeStep] assistant.py 없음 — /assistant 비활성화')
+
 # GPU 지원 여부 자동 감지 (FP16은 아키텍처 호환성 문제로 비활성화)
 _device = "cuda" if torch.cuda.is_available() else "cpu"
 _half   = False   # FP16 비활성화 — 일부 GPU 아키텍처에서 kernel 미지원
@@ -370,6 +378,11 @@ def _traffic_light_status() -> str | None:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 app = FastAPI(title="SafeStep Server")
 
+# LLM 어시스턴트 라우터 등록
+if _assistant_loaded:
+    app.include_router(assistant_router)
+    print("[SafeStep] /assistant 엔드포인트 등록 완료 ✅")
+
 # CORS — ngrok / 웹 클라이언트 모두 허용
 app.add_middleware(
     CORSMiddleware,
@@ -544,187 +557,106 @@ async def detect(file: UploadFile = File(...)):
             if grp not in groups_min or det["depth_m"] < groups_min[grp]:
                 groups_min[grp] = det["depth_m"]
 
-    groups_speed: dict[str, float | None] = {
-        grp: _calc_approach_speed(grp, min_d)
-        for grp, min_d in groups_min.items()
-    }
-
+    # approach_speed -- group min depth delta
     for det in detections:
         grp = _GROUP_MAP.get(det["label"])
-        det["group"]          = grp
-        det["approach_speed"] = groups_speed.get(grp) if grp else None
+        if grp and det["depth_m"] is not None:
+            det["approach_speed"] = _calc_approach_speed(grp, groups_min.get(grp, det["depth_m"]))
+        else:
+            det["approach_speed"] = None
 
-    resp = {"detections": detections}
-    _cache_set(_detect_cache, md5, resp)
-    return JSONResponse(resp)
+    return JSONResponse({"detections": detections})
 
-
-@app.post("/signal")
-async def signal_detect(file: UploadFile = File(...)):
-    """
-    신호등 색상 감지.
-    yolov8n 으로 traffic_light 박스 탐지 → HSV 분석 → blinking 판별.
-    Returns: {"color": "red" | "green" | "blinking" | null, "confidence": float | null}
-    """
-    if signal_model is None:
-        return JSONResponse({"color": None, "confidence": None})
-
-    try:
-        image = Image.open(io.BytesIO(await file.read())).convert("RGB")
-    except Exception as e:
-        raise HTTPException(400, f"이미지 파싱 실패: {e}")
-
-    img_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    w, h    = image.size
-
-    # traffic_light(class 9) 만 탐지
-    results    = signal_model(image, classes=[_TRAFFIC_LIGHT_CLASS],
-                              imgsz=320, conf=0.35, verbose=False, half=_half)
-    best_color : str | None = None
-    best_conf  : float      = 0.0
-
-    for result in results:
-        for box in result.boxes:
-            conf = float(box.conf[0])
-            if conf < best_conf:
-                continue
-            x1, y1, x2, y2 = (int(v) for v in box.xyxy[0].tolist())
-            color = _detect_light_color(img_bgr, x1, y1, x2, y2)
-            if color is not None:
-                best_color = color
-                best_conf  = conf
-
-    _light_history.append(best_color)
-    final_color = _traffic_light_status()
-
-    return JSONResponse({
-        "color":      final_color,
-        "confidence": round(best_conf, 3) if best_color else None,
-    })
 
 
 @app.post("/segment")
 async def segment(file: UploadFile = File(...)):
+    """
+    노면 세그멘테이션 — surface.pt (한국 도로 데이터).
+    반환: { status, is_stairs, mask_png(base64), zones:{left,center,right} }
+    """
     if surface_model is None:
-        raise HTTPException(503, "surface.pt 가 없습니다. 서버 폴더에 복사 후 재시작해주세요.")
+        raise HTTPException(503, "세그멘테이션 모델 미로드 — surface.pt 확인")
 
     raw = await file.read()
-
-    # ── 프레임 캐시 확인 ─────────────────────────────────────────────────────
     md5 = hashlib.md5(raw).hexdigest()
-    cached_result = _cache_get(_segment_cache, md5)
-    if cached_result is not None:
-        return JSONResponse(cached_result)
+    cached = _cache_get(_segment_cache, md5)
+    if cached:
+        return JSONResponse(cached)
 
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as e:
         raise HTTPException(400, f"이미지 파싱 실패: {e}")
 
-    orig_w, orig_h = image.size
+    w, h = image.size
 
-    # ── YOLO 세그멘테이션 추론 ─────────────────────────────
     results = surface_model(image, imgsz=512, verbose=False, half=_half)
-    result  = results[0]
 
-    # ── 픽셀 마스크 생성 ────────────────────────────────────
-    cat_mask  = np.zeros((orig_h, orig_w), dtype=np.uint8)
-    mask_rgba = np.zeros((orig_h, orig_w, 4), dtype=np.uint8)
+    # ── 클래스별 픽셀 마스크 합산 ─────────────────────────────────────────
+    combined = np.zeros((h, w), dtype=np.uint8)   # 카테고리 int
+    rgba_canvas = np.zeros((h, w, 4), dtype=np.uint8)
 
-    if result.masks is not None:
-        seg_masks = result.masks.data.cpu().numpy()   # (N, mH, mW)
-        cls_arr   = result.boxes.cls.cpu().numpy().astype(int)
-        conf_arr  = result.boxes.conf.cpu().numpy()
-
-        # 신뢰도 낮은 것부터 먼저 그려 높은 것이 위에 덮이게
-        order = np.argsort(conf_arr)
-        for i in order:
-            if conf_arr[i] < 0.25:
+    for result in results:
+        if result.masks is None:
+            continue
+        masks_data = result.masks.data.cpu().numpy()   # (N, H', W')
+        for i, mask_raw in enumerate(masks_data):
+            label = surface_model.names[int(result.boxes.cls[i])]
+            cat   = SURFACE_CATEGORY.get(label)
+            if cat is None:
                 continue
-            cls_name = surface_model.names[cls_arr[i]]
-            category = SURFACE_CATEGORY.get(cls_name)
-            if category is None:
-                continue
+            cat_id = CAT_INT[cat]
+            color  = COLOR_MAP[cat]
+            # 마스크를 원본 해상도로 리사이즈
+            mask_resized = cv2.resize(
+                mask_raw, (w, h), interpolation=cv2.INTER_NEAREST
+            ).astype(bool)
+            combined[mask_resized] = cat_id
+            rgba_canvas[mask_resized] = color
 
-            # 마스크를 원본 크기로 리사이즈
-            mask_bin = cv2.resize(
-                seg_masks[i].astype(np.float32), (orig_w, orig_h),
-                interpolation=cv2.INTER_LINEAR
-            ) > 0.5
+    # ── 전체 상태 판정 ──────────────────────────────────────────────────────
+    total_px = w * h
+    counts: dict[str, int] = {}
+    for cat, cat_id in CAT_INT.items():
+        counts[cat] = int(np.sum(combined == cat_id))
 
-            cat_mask[mask_bin]  = CAT_INT[category]
-            mask_rgba[mask_bin] = COLOR_MAP[category]
+    is_stairs = counts.get("caution", 0) / max(total_px, 1) > 0.15
 
-    # ── 중앙 하단 1/3 구역으로 전체 상태 판단 ─────────────
-    cy0       = orig_h * 2 // 3
-    cx0, cx1  = orig_w // 3, orig_w * 2 // 3
-    region    = cat_mask[cy0:, cx0:cx1]
+    dominant = max(counts, key=lambda c: counts[c]) if any(counts.values()) else "sidewalk"
+    status = dominant
 
-    counts = {cat: int(np.sum(region == ci)) for cat, ci in CAT_INT.items()}
-    total  = max(sum(counts.values()), 1)
-    ratios = {k: round(v / total, 3) for k, v in counts.items()}
-
-    if counts["caution"] > total * 0.05:
-        status = "caution"
-    elif counts["road"] > total * 0.10:
-        status = "road"
-    else:
-        dominant = max(counts, key=counts.get)
-        status   = dominant if counts[dominant] > 0 else "unknown"
-
-    # ── 3구역 분석 (left / center / right) ────────────────
-    # 하단 1/3 전체를 가로 3등분해서 각 구역 노면 상태 판정
-    zone_cols = {
-        "left":   (0,               orig_w // 3),
-        "center": (orig_w // 3,     orig_w * 2 // 3),
-        "right":  (orig_w * 2 // 3, orig_w),
-    }
+    # ── 3구역 분석 (left / center / right) ─────────────────────────────────
+    third = w // 3
     zones: dict[str, str] = {}
-    for z_name, (zx0, zx1) in zone_cols.items():
-        zr      = cat_mask[cy0:, zx0:zx1]
-        zc      = {cat: int(np.sum(zr == ci)) for cat, ci in CAT_INT.items()}
-        zt      = max(sum(zc.values()), 1)
-        if zc["caution"] > zt * 0.05:
-            zones[z_name] = "caution"
-        elif zc["road"] > zt * 0.10:
-            zones[z_name] = "road"
-        else:
-            dom = max(zc, key=zc.get)
-            zones[z_name] = dom if zc[dom] > 0 else "unknown"
+    for zone_name, col_start, col_end in [
+        ("left",   0,       third),
+        ("center", third,   third * 2),
+        ("right",  third*2, w),
+    ]:
+        zone_slice = combined[:, col_start:col_end]
+        zone_counts: dict[str, int] = {}
+        for cat, cat_id in CAT_INT.items():
+            zone_counts[cat] = int(np.sum(zone_slice == cat_id))
+        zones[zone_name] = max(zone_counts, key=lambda c: zone_counts[c]) \
+            if any(zone_counts.values()) else "sidewalk"
 
-    # ── 계단 감지 — 중앙 하단에 caution_zone_stairs 가 있으면 True ───────────
-    is_stairs = False
-    if result.masks is not None:
-        for i in order:
-            cls_name = surface_model.names[cls_arr[i]]
-            if "stairs" in cls_name and conf_arr[i] >= 0.25:
-                mask_bin = cv2.resize(
-                    seg_masks[i].astype(np.float32), (orig_w, orig_h),
-                    interpolation=cv2.INTER_LINEAR
-                ) > 0.5
-                # 중앙 하단 구역에 200px 이상이면 계단으로 판정
-                if np.sum(mask_bin[cy0:, cx0:cx1]) > 200:
-                    is_stairs = True
-                    break
-
-    # ── PNG → base64 ───────────────────────────────────────
-    pil_mask = Image.fromarray(mask_rgba, mode="RGBA")
+    # ── 마스크 PNG → base64 ─────────────────────────────────────────────────
+    pil_mask = Image.fromarray(rgba_canvas, mode="RGBA")
     buf = io.BytesIO()
-    pil_mask.save(buf, format="PNG", optimize=True)
-    mask_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    pil_mask.save(buf, format="PNG")
+    mask_b64 = base64.b64encode(buf.getvalue()).decode()
 
-    resp = {
-        "mask_b64":  mask_b64,
+    payload = {
         "status":    status,
-        "ratios":    ratios,
+        "is_stairs": bool(is_stairs),
+        "mask_b64":  mask_b64,
+        "ratios":    {cat: round(counts.get(cat, 0) / max(total_px, 1), 4) for cat in CAT_INT},
         "zones":     zones,
-        "is_stairs": is_stairs,
     }
-    _cache_set(_segment_cache, md5, resp)
-    return JSONResponse(resp)
+    _cache_set(_segment_cache, md5, payload)
+    return JSONResponse(payload)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if __name__ == "__main__":
-    print("[SafeStep] 서버 시작 (포트 8000)")
     uvicorn.run(app, host="0.0.0.0", port=8000)

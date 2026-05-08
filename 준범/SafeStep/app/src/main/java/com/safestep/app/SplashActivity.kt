@@ -6,12 +6,16 @@ import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
+import com.safestep.app.assistant.AssistantAction
+import com.safestep.app.assistant.VoiceAssistant
+import com.safestep.app.detect.RemoteDetector
 import java.util.Locale
 
 class SplashActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private lateinit var tts: TextToSpeech
     private lateinit var serverUrlInput: EditText
+    private lateinit var voiceAssistant: VoiceAssistant
 
     companion object {
         const val PREFS_NAME = "safestep_prefs"
@@ -28,7 +32,10 @@ class SplashActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // 서버 URL 입력창 — 저장된 값 불러오기
         serverUrlInput = findViewById(R.id.serverUrlInput)
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
+        val savedUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+        serverUrlInput.setText(savedUrl)
+        // 앱 시작 시 SharedPreferences 값을 RemoteDetector에 즉시 반영
+        RemoteDetector.SERVER_URL = savedUrl
 
         // 카메라 모드 → MapActivity
         findViewById<Button>(R.id.startButton).setOnClickListener {
@@ -45,6 +52,34 @@ class SplashActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             startActivity(Intent(this, VideoTestActivity::class.java))
             finish()
         }
+
+        // 음성 어시스턴트 — 화면 길게 누르면 활성화
+        val baseUrl = savedUrl.trimEnd('/').removeSuffix("/detect")
+        voiceAssistant = VoiceAssistant(
+            activity      = this,
+            serverBaseUrl = baseUrl,
+            screen        = "splash",
+            onAction      = { action -> handleAssistantAction(action) },
+        )
+        voiceAssistant.attachLongPressTo(findViewById(android.R.id.content))
+    }
+
+    private fun handleAssistantAction(action: AssistantAction) {
+        when (action) {
+            is AssistantAction.EnterCameraMode -> {
+                saveServerUrl()
+                tts.stop()
+                startActivity(Intent(this, MapActivity::class.java))
+                finish()
+            }
+            is AssistantAction.EnterVideoTestMode -> {
+                saveServerUrl()
+                tts.stop()
+                startActivity(Intent(this, VideoTestActivity::class.java))
+                finish()
+            }
+            else -> { /* SpeakOnly 등은 VoiceAssistant가 자동으로 TTS 발화 */ }
+        }
     }
 
     /** EditText 값을 SharedPreferences에 저장 */
@@ -55,6 +90,9 @@ class SplashActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 .edit()
                 .putString(KEY_SERVER_URL, url)
                 .apply()
+            // RemoteDetector에 즉시 반영 — VideoTestActivity는 SharedPreferences를
+            // 읽지 않고 SERVER_URL을 바로 사용하기 때문에 여기서 함께 설정해야 함
+            RemoteDetector.SERVER_URL = url
         }
     }
 
@@ -70,6 +108,7 @@ class SplashActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         tts.shutdown()
+        voiceAssistant.release()
         super.onDestroy()
     }
 }

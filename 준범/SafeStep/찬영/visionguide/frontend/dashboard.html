@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionGuide · Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0a; --bg-card: #1c1c1c; --line: #2a2a2a;
+            --fg: #f5f5f0; --fg-mute: #9a9a96; --fg-dim: #636361;
+            --accent: #fff200; --danger: #ff3b30; --ok: #30d158; --idle: #636361;
+            --font-display: 'Gowun Batang', serif;
+            --font-body: 'IBM Plex Sans KR', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-body);
+            background: radial-gradient(ellipse at top right, rgba(255,242,0,0.04), transparent 50%), var(--bg);
+            color: var(--fg); min-height: 100vh; padding: 32px 40px;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex; align-items: baseline; justify-content: space-between;
+            padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 32px;
+        }
+        .brand { display: flex; align-items: baseline; gap: 14px; }
+        .brand h1 { font-family: var(--font-display); font-size: 36px; font-weight: 700; letter-spacing: -0.02em; }
+        .brand .tag {
+            font-family: var(--font-mono); font-size: 11px; color: var(--accent);
+            letter-spacing: 0.15em; text-transform: uppercase;
+            padding: 4px 10px; border: 1px solid var(--accent); border-radius: 4px;
+        }
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 10px 16px; background: var(--bg-card);
+            border: 1px solid var(--line); border-radius: 999px;
+            font-family: var(--font-mono); font-size: 12px; color: var(--fg-mute);
+        }
+        .status-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--idle); }
+        .status-dot[data-state="ok"]   { background: var(--ok);     box-shadow: 0 0 8px var(--ok); }
+        .status-dot[data-state="warn"] { background: var(--accent); }
+        .status-dot[data-state="err"]  { background: var(--danger); }
+        .tts-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 10px 16px; background: var(--bg-card);
+            border: 1px solid var(--line); border-radius: 999px;
+            font-family: var(--font-mono); font-size: 12px; color: var(--fg-mute);
+            cursor: pointer; transition: border-color 0.2s, color 0.2s; user-select: none;
+        }
+        .tts-pill:hover { border-color: var(--fg-dim); color: var(--fg); }
+        .tts-indicator {
+            display: block; width: 8px; height: 8px; border-radius: 50%;
+            background: var(--ok); box-shadow: 0 0 8px var(--ok); flex-shrink: 0;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .tts-indicator.off { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        /* ── Layout ── */
+        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; max-width: 1400px; margin: 0 auto; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+        /* ── Preview card ── */
+        .preview-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+
+        .tab-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+        .tab-bar { display: flex; }
+        .tab-btn {
+            padding: 14px 22px; font-family: var(--font-mono); font-size: 12px;
+            letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-mute);
+            background: none; border: none; border-bottom: 2px solid transparent;
+            cursor: pointer; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px;
+        }
+        .tab-btn:hover { color: var(--fg); }
+        .tab-btn.active { color: var(--fg); border-bottom-color: var(--accent); }
+
+        /* 슬롯 토글 (서버1 / 서버2) */
+        .slot-toggle { display: flex; gap: 8px; margin-right: 12px; }
+        .slot-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; font-family: var(--font-mono); font-size: 11px;
+            letter-spacing: 0.06em; text-transform: uppercase;
+            background: rgba(255,255,255,0.03); color: var(--fg-mute);
+            border: 1px solid var(--line); border-radius: 6px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .slot-btn:hover { color: var(--fg); border-color: var(--fg-mute); }
+        .slot-btn.active {
+            color: var(--fg); border-color: var(--accent);
+            background: rgba(255,242,0,0.08);
+        }
+        .slot-dot {
+            width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+        }
+        .slot-dot[data-state="active"] { background: var(--ok); box-shadow: 0 0 6px rgba(48,209,88,0.6); }
+        .slot-dot[data-state="empty"]  { background: rgba(255,255,255,0.18); }
+        .slot-status { font-size: 10px; opacity: 0.7; margin-left: 4px; }
+        .live-img-slot { max-width: 100%; max-height: 100%; }
+
+        .preview-badge {
+            font-family: var(--font-mono); font-size: 11px; padding: 3px 10px;
+            border-radius: 4px; background: rgba(255,242,0,0.12); color: var(--accent); margin-right: 16px;
+        }
+
+        /* ── Preview stage ── */
+        .preview-stage {
+            position: relative; aspect-ratio: 16/9; background: #000;
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+        }
+        .tab-view {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .tab-view.hidden { display: none; }
+        .tab-view img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .tab-view canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+        .live-img-slot { max-width: 100%; max-height: 100%; display: none; object-fit: contain; }
+        #canvas-overlay-live { position: absolute; inset: 0; pointer-events: none; display: none; }
+
+        .preview-empty {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 16px; color: var(--fg-dim); padding: 40px; text-align: center;
+        }
+        .preview-empty.hidden { display: none; }
+        .pulse { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--line); position: relative; }
+        .pulse::before, .pulse::after {
+            content: ''; position: absolute; inset: 0; border-radius: 50%;
+            border: 2px solid var(--accent); opacity: 0;
+            animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
+        }
+        .pulse::after { animation-delay: 1s; }
+        @keyframes ping { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
+        .preview-empty p { font-size: 14px; line-height: 1.6; }
+        .preview-empty .hint { font-family: var(--font-mono); font-size: 11px; color: var(--fg-dim); }
+
+        /* ── 영상 업로드 패널 ── */
+        .video-panel { padding: 16px 20px; border-top: 1px solid var(--line); display: none; }
+        .video-panel.active { display: block; }
+        .video-drop {
+            border: 2px dashed var(--line); border-radius: 12px; padding: 16px;
+            text-align: center; cursor: pointer; transition: border-color 0.2s; margin-bottom: 10px;
+        }
+        .video-drop:hover { border-color: var(--accent); }
+        .video-drop input { display: none; }
+        .video-drop-label { font-size: 13px; color: var(--fg-mute); display: block; margin-bottom: 4px; }
+        .video-drop-hint { font-family: var(--font-mono); font-size: 11px; color: var(--fg-dim); }
+        .video-btn {
+            width: 100%; padding: 11px; background: var(--accent); color: #000;
+            border: none; border-radius: 10px; font-family: var(--font-body);
+            font-size: 14px; font-weight: 700; cursor: pointer;
+        }
+        .video-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .video-progress { margin-top: 10px; display: none; user-select: none; }
+        .video-progress-bar-wrap {
+            position: relative; height: 20px; display: flex; align-items: center;
+            cursor: pointer; padding: 0 6px;
+        }
+        .video-progress-track {
+            position: absolute; left: 6px; right: 6px; height: 4px;
+            background: var(--line-strong); border-radius: 2px;
+        }
+        .video-progress-analyzed {
+            position: absolute; left: 0; height: 100%;
+            background: rgba(255,242,0,0.25); border-radius: 2px; width: 0%;
+        }
+        .video-progress-fill {
+            position: absolute; left: 0; height: 100%;
+            background: var(--accent); border-radius: 2px; width: 0%;
+        }
+        .video-progress-handle {
+            position: absolute; left: 6px; top: 50%; transform: translate(-50%, -50%);
+            width: 13px; height: 13px; border-radius: 50%; background: var(--accent);
+            box-shadow: 0 0 0 3px rgba(255,242,0,0.3);
+            transition: transform 0.1s; pointer-events: none;
+        }
+        .video-progress-bar-wrap:active .video-progress-handle,
+        .video-progress-bar-wrap.dragging .video-progress-handle {
+            transform: translate(-50%, -50%) scale(1.3);
+        }
+        .video-progress-info {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--fg-mute);
+        }
+        .video-play-btn {
+            background: none; border: none; color: var(--fg); cursor: pointer;
+            padding: 2px; display: flex; align-items: center; flex-shrink: 0;
+        }
+        .video-play-btn:hover { color: var(--accent); }
+
+        /* ── AI 결과 ── */
+        .result-bar {
+            padding: 12px 20px; border-top: 1px solid var(--line);
+            display: flex; align-items: center; gap: 12px; min-height: 48px;
+        }
+        .result-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-dim); white-space: nowrap; }
+        .result-message { font-size: 14px; color: var(--fg); }
+        .result-message.danger { color: var(--danger); }
+        .result-message.ok     { color: var(--ok); }
+        .result-message.warn   { color: var(--accent); }
+
+        /* ── AI 분석 카드 ── */
+        .ai-tts { font-size: 15px; font-weight: 600; color: var(--fg); line-height: 1.5; margin-bottom: 10px; }
+        .ai-tts.danger { color: var(--danger); }
+        .ai-tts.warn   { color: var(--accent); }
+        .ai-tts.ok     { color: var(--ok); }
+        .ai-detail { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .ai-detail-row { font-family: var(--font-mono); font-size: 11px; color: var(--fg-mute); display: flex; gap: 6px; }
+        .ai-detail-icon { color: var(--fg-dim); flex-shrink: 0; }
+        .ai-detail-label { color: var(--fg-dim); flex-shrink: 0; }
+        .ai-obs-item { display: flex; align-items: center; gap: 5px; }
+        .ai-obs-rank { font-size: 10px; color: var(--fg-dim); }
+        .ai-obs-danger { color: var(--danger); }
+        .ai-obs-warn   { color: var(--accent); }
+        .ai-zone-row { display: flex; gap: 6px; }
+        .ai-zone { padding: 2px 7px; border-radius: 4px; font-size: 10px; background: rgba(255,255,255,0.05); }
+        .ai-zone.danger { background: rgba(255,59,48,0.15); color: var(--danger); }
+        .ai-zone.safe   { background: rgba(48,209,88,0.12); color: var(--ok); }
+        .ai-zone.caution { background: rgba(255,242,0,0.12); color: var(--accent); }
+        .ai-dodge { color: var(--accent); font-weight: 600; }
+
+
+        /* ── Sidebar ── */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .info-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+        .info-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; user-select: none; }
+        .info-card-header:hover { background: rgba(255,255,255,0.02); }
+        .info-card-header h3 { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-mute); }
+        .collapse-icon { font-family: var(--font-mono); font-size: 14px; color: var(--fg-dim); transition: transform 0.2s; }
+        .info-card.collapsed .collapse-icon { transform: rotate(-90deg); }
+        .info-card-body { padding: 0 20px 16px; }
+        .info-card.collapsed .info-card-body { display: none; }
+        .info-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+        .info-row:last-child { border-bottom: none; }
+        .info-key { color: var(--fg-mute); }
+        .info-val { font-family: var(--font-mono); font-weight: 500; }
+
+        /* ── 분석 카드 ── */
+        .filter-ctrl {
+            display: flex; gap: 6px; padding: 8px 0 10px;
+            border-bottom: 1px dashed var(--line);
+        }
+        .filter-ctrl-btn {
+            flex: 1; padding: 5px 0;
+            font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.05em;
+            background: var(--bg); border: 1px solid var(--line);
+            color: var(--fg-mute); border-radius: 6px; cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .filter-ctrl-btn:hover { border-color: var(--accent); color: var(--fg); }
+        .group-row { border-bottom: 1px dashed var(--line); }
+        .group-row:last-child { border-bottom: none; }
+        .group-header {
+            display: flex; align-items: center; padding: 7px 8px; gap: 6px; font-size: 13px;
+            border-radius: 7px; margin: 1px -8px; transition: background 0.15s, box-shadow 0.15s;
+        }
+        .group-header.active {
+            background: rgba(255,255,255,0.05);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        .group-label {
+            display: flex; align-items: center; gap: 7px;
+            cursor: pointer; color: var(--fg-mute); flex: 1; user-select: none;
+        }
+        .group-header.active .group-label { color: var(--fg); }
+        .group-label input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .group-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .group-val {
+            font-family: var(--font-mono); font-size: 12px; color: var(--fg);
+            min-width: 44px; text-align: right; transition: opacity 0.2s;
+        }
+        .group-header.dimmed .group-val { opacity: 0.2; }
+        .expand-btn {
+            background: none; border: none; cursor: pointer;
+            color: var(--fg-dim); font-size: 11px; padding: 2px 4px;
+            line-height: 1; transition: transform 0.2s;
+            transform: rotate(-90deg);
+        }
+        .expand-btn.open { transform: rotate(0deg); }
+        .sub-list { padding: 0 0 6px 28px; display: none; }
+        .sub-list.open { display: block; }
+        .sub-row {
+            display: flex; align-items: center; padding: 4px 0; gap: 6px; font-size: 12px;
+            border-bottom: 1px dashed rgba(255,255,255,0.04);
+        }
+        .sub-row:last-child { border-bottom: none; }
+        .sub-label {
+            display: flex; align-items: center; gap: 6px;
+            cursor: pointer; color: var(--fg-dim); flex: 1; user-select: none;
+        }
+        .sub-label input[type="checkbox"] { width: 12px; height: 12px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .sub-row.active { background: rgba(255,255,255,0.03); border-radius: 5px; padding-left: 4px; margin-left: -4px; }
+        .sub-row.active .sub-label { color: var(--fg-mute); }
+        .sub-val {
+            font-family: var(--font-mono); font-size: 11px; color: var(--fg-mute);
+            min-width: 40px; text-align: right; transition: opacity 0.2s;
+        }
+        .sub-row.dimmed .sub-val { opacity: 0.2; }
+        .foot-zone-label {
+            font-size: 13px; padding: 8px 0 10px;
+            border-bottom: 1px dashed var(--line); margin-bottom: 6px; color: var(--fg-mute);
+        }
+        .foot-zone-label span { color: var(--fg); font-weight: 500; }
+        .no-data { font-size: 12px; color: var(--fg-dim); font-family: var(--font-mono); padding: 6px 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <h1>VisionGuide</h1>
+            <span class="tag">Dashboard</span>
+        </div>
+        <div class="header-right">
+            <button class="tts-pill" id="depth-toggle" onclick="toggleDepth()">
+                <span class="tts-indicator" id="depth-dot"></span>
+                <span id="depth-label">Depth on</span>
+            </button>
+            <button class="tts-pill" id="capture-toggle" onclick="toggleCapture()" title="원본 프레임 + 라벨을 학습용으로 저장">
+                <span class="tts-indicator off" id="capture-dot"></span>
+                <span id="capture-label">데이터 수집 off</span>
+            </button>
+            <button class="tts-pill" id="ollama-toggle" onclick="toggleOllama()">
+                <span class="tts-indicator off" id="ollama-dot"></span>
+                <span id="ollama-label">Ollama off</span>
+            </button>
+            <button class="tts-pill" id="tts-toggle" onclick="toggleTts()">
+                <span class="tts-indicator" id="tts-dot"></span>
+                <span id="tts-label">음성 on</span>
+            </button>
+            <div class="status-pill">
+                <span class="status-dot" id="ws-dot" data-state="idle"></span>
+                <span id="ws-text">대시보드 연결 중...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="grid">
+        <section class="preview-card">
+            <div class="tab-header">
+                <div class="tab-bar">
+                    <button class="tab-btn active" id="tab-live">라이브 카메라</button>
+                    <button class="tab-btn"        id="tab-video">영상 / 사진 분석</button>
+                </div>
+                <div class="slot-toggle" id="slot-toggle">
+                    <button class="slot-btn active" id="slot-btn-1" data-slot="1">
+                        <span class="slot-dot" data-state="empty"></span>
+                        서버1 <span class="slot-status" id="slot-status-1">비어있음</span>
+                    </button>
+                    <button class="slot-btn" id="slot-btn-2" data-slot="2">
+                        <span class="slot-dot" data-state="empty"></span>
+                        서버2 <span class="slot-status" id="slot-status-2">비어있음</span>
+                    </button>
+                </div>
+                <span class="preview-badge" id="phone-badge">대기 중</span>
+            </div>
+
+            <div class="preview-stage">
+                <!-- 라이브 뷰 -->
+                <div class="tab-view" id="live-view">
+                    <div class="preview-empty" id="live-empty">
+                        <div class="pulse"></div>
+                        <p>핸드폰에서 <strong>카메라 모드</strong>를 시작하면<br>자동으로 여기에 표시됩니다</p>
+                        <p class="hint" id="live-hint">waiting for phone...</p>
+                    </div>
+                    <!-- 슬롯별 MJPEG 스트림 (선택된 것만 표시) -->
+                    <img id="live-img-1" class="live-img-slot" src="/camera/stream/1" data-slot="1" style="display:none;">
+                    <img id="live-img-2" class="live-img-slot" src="/camera/stream/2" data-slot="2" style="display:none;">
+                    <canvas id="canvas-overlay-live"></canvas>
+                </div>
+
+                <!-- 영상/사진 분석 뷰 -->
+                <div class="tab-view hidden" id="video-view">
+                    <div class="preview-empty" id="video-empty">
+                        <div class="pulse"></div>
+                        <p>영상을 선택하고<br><strong>▶ 재생</strong>을 누르세요</p>
+                        <p class="hint">waiting for file...</p>
+                    </div>
+                    <canvas id="canvas-video" style="display:none; max-width:100%; max-height:100%;"></canvas>
+                </div>
+            </div>
+
+            <!-- 영상 업로드 패널 (영상/사진 탭에서만 표시) -->
+            <div class="video-panel" id="video-panel">
+                <div class="video-drop" onclick="document.getElementById('video-input').click()">
+                    <input type="file" id="video-input" accept="video/*,image/*">
+                    <span class="video-drop-label" id="video-filename">파일 선택 (영상 / 사진)</span>
+                    <span class="video-drop-hint">mp4, avi, mov / jpg, png 등</span>
+                </div>
+                <button class="video-btn" id="video-btn" disabled>▶ 재생</button>
+                <div class="video-progress" id="video-progress">
+                    <div class="video-progress-bar-wrap" id="video-progress-bar-wrap">
+                        <div class="video-progress-track">
+                            <div class="video-progress-analyzed" id="video-progress-analyzed"></div>
+                            <div class="video-progress-fill" id="video-progress-fill"></div>
+                        </div>
+                        <div class="video-progress-handle" id="video-progress-handle"></div>
+                    </div>
+                    <div class="video-progress-info">
+                        <button id="video-play-pause" class="video-play-btn" title="재생/일시정지">
+                            <svg id="icon-pause" viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="15" y="4" width="4" height="16" rx="1" fill="currentColor"/></svg>
+                            <svg id="icon-play"  viewBox="0 0 24 24" width="18" height="18" style="display:none"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
+                        </button>
+                        <span id="video-progress-time">0:00 / 0:00</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <aside class="sidebar">
+            <div class="info-card" id="card-ai">
+                <div class="info-card-header" onclick="toggleCard('card-ai')">
+                    <h3>AI 분석</h3>
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="info-card-body">
+                    <div style="padding: 6px 0;">
+                        <!-- TTS 음성 메시지 -->
+                        <div class="ai-tts" id="result-msg">대기 중...</div>
+                        <!-- 판단 근거 -->
+                        <div class="ai-detail" id="ai-detail" style="display:none;">
+                            <!-- 장애물 목록 -->
+                            <div id="ai-obs-list"></div>
+                            <!-- 노면 3구역 -->
+                            <div class="ai-detail-row" id="ai-zones-row" style="display:none;">
+                                <span class="ai-detail-icon">🛣</span>
+                                <div class="ai-zone-row" id="ai-zones"></div>
+                            </div>
+                            <!-- 회피 방향 -->
+                            <div class="ai-detail-row" id="ai-dodge-row" style="display:none;">
+                                <span class="ai-detail-icon">→</span>
+                                <span class="ai-dodge" id="ai-dodge"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 노면 분석 -->
+            <div class="info-card" id="card-surface">
+                <div class="info-card-header" onclick="toggleCard('card-surface')">
+                    <h3>노면 분석</h3>
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="info-card-body">
+                    <div class="foot-zone-label" id="surf-foot">발 앞: <span>대기 중</span></div>
+                    <div class="filter-ctrl">
+                        <button class="filter-ctrl-btn" onclick="selectAllCard('card-surface',true)">전체 선택</button>
+                        <button class="filter-ctrl-btn" onclick="selectAllCard('card-surface',false)">전체 해제</button>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#78dc64"></span>안전 (인도)</label>
+                            <span class="group-val" id="surf-safe"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (아스팔트)</label><span class="sub-val" id="surf-cls-sidewalk_asphalt"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (블록)</label><span class="sub-val" id="surf-cls-sidewalk_blocks"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (시멘트)</label><span class="sub-val" id="surf-cls-sidewalk_cement"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (우레탄)</label><span class="sub-val" id="surf-cls-sidewalk_urethane"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (흙/돌)</label><span class="sub-val" id="surf-cls-sidewalk_soil_stone"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 인도 (기타)</label><span class="sub-val" id="surf-cls-sidewalk_other"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ffe44d"></span>점자블록</label>
+                            <span class="group-val" id="surf-braille"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 점자블록 (정상)</label><span class="sub-val" id="surf-cls-braille_guide_blocks_normal"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ffaa44"></span>주의구역</label>
+                            <span class="group-val" id="surf-caution"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 골목길</label><span class="sub-val" id="surf-cls-alley_normal"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 골목 횡단보도</label><span class="sub-val" id="surf-cls-alley_crosswalk"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 골목 (파손)</label><span class="sub-val" id="surf-cls-alley_damaged"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 과속방지턱</label><span class="sub-val" id="surf-cls-alley_speed_bump"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 파손 인도</label><span class="sub-val" id="surf-cls-sidewalk_damaged"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 점자블록 (파손)</label><span class="sub-val" id="surf-cls-braille_guide_blocks_damaged"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 격자 덮개</label><span class="sub-val" id="surf-cls-caution_zone_grating"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 맨홀</label><span class="sub-val" id="surf-cls-caution_zone_manhole"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 공사 구역</label><span class="sub-val" id="surf-cls-caution_zone_repair_zone"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 계단</label><span class="sub-val" id="surf-cls-caution_zone_stairs"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 나무 구역</label><span class="sub-val" id="surf-cls-caution_zone_tree_zone"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ff4444"></span>차도 (위험)</label>
+                            <span class="group-val" id="surf-danger"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 차도</label><span class="sub-val" id="surf-cls-roadway_normal"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 차도 횡단보도</label><span class="sub-val" id="surf-cls-roadway_crosswalk"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#c87cff"></span>자전거도로</label>
+                            <span class="group-val" id="surf-bike"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 자전거 도로</label><span class="sub-val" id="surf-cls-bike_lane"></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 장애물 분석 -->
+            <div class="info-card" id="card-obstacle">
+                <div class="info-card-header" onclick="toggleCard('card-obstacle')">
+                    <h3>장애물 분석</h3>
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="info-card-body">
+                    <div class="foot-zone-label" id="obs-top">최우선: <span>대기 중</span></div>
+                    <div class="filter-ctrl">
+                        <button class="filter-ctrl-btn" onclick="selectAllCard('card-obstacle',true)">전체 선택</button>
+                        <button class="filter-ctrl-btn" onclick="selectAllCard('card-obstacle',false)">전체 해제</button>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ff4444"></span>차량</label>
+                            <span class="group-val" id="obs-vehicle"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 승용차</label><span class="sub-val" id="obs-cls-car"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 버스</label><span class="sub-val" id="obs-cls-bus"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 트럭</label><span class="sub-val" id="obs-cls-truck"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 오토바이</label><span class="sub-val" id="obs-cls-motorcycle"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ff8866"></span>개인이동장치</label>
+                            <span class="group-val" id="obs-micro"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 자전거</label><span class="sub-val" id="obs-cls-bicycle"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 스쿠터</label><span class="sub-val" id="obs-cls-scooter"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#66b3ff"></span>사람/동물</label>
+                            <span class="group-val" id="obs-person"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 사람</label><span class="sub-val" id="obs-cls-person"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 고양이</label><span class="sub-val" id="obs-cls-cat"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 개</label><span class="sub-val" id="obs-cls-dog"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 유모차</label><span class="sub-val" id="obs-cls-stroller"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 휠체어</label><span class="sub-val" id="obs-cls-wheelchair"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 리어카</label><span class="sub-val" id="obs-cls-carrier"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 이동식 안내판</label><span class="sub-val" id="obs-cls-movable_signage"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ffaa44"></span>고정 장애물</label>
+                            <span class="group-val" id="obs-fixed"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 바리케이드</label><span class="sub-val" id="obs-cls-barricade"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 벤치</label><span class="sub-val" id="obs-cls-bench"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 볼라드</label><span class="sub-val" id="obs-cls-bollard"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 의자</label><span class="sub-val" id="obs-cls-chair"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 소화전</label><span class="sub-val" id="obs-cls-fire_hydrant"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 키오스크</label><span class="sub-val" id="obs-cls-kiosk"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 주차미터</label><span class="sub-val" id="obs-cls-parking_meter"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 기둥</label><span class="sub-val" id="obs-cls-pole"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 화분</label><span class="sub-val" id="obs-cls-potted_plant"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 전력 제어기</label><span class="sub-val" id="obs-cls-power_controller"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 정류장</label><span class="sub-val" id="obs-cls-stop"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 테이블</label><span class="sub-val" id="obs-cls-table"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 가로수</label><span class="sub-val" id="obs-cls-tree_trunk"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 신호등 제어기</label><span class="sub-val" id="obs-cls-traffic_light_controller"></span></div>
+                        </div>
+                    </div>
+                    <div class="group-row">
+                        <div class="group-header">
+                            <label class="group-label"><input type="checkbox" onchange="onGroupCb(this)"><span class="group-dot" style="background:#ffe44d"></span>신호등/표지판</label>
+                            <span class="group-val" id="obs-signal"></span>
+                            <button class="expand-btn" onclick="toggleExpand(this)">▼</button>
+                        </div>
+                        <div class="sub-list">
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 신호등</label><span class="sub-val" id="obs-cls-traffic_light"></span></div>
+                            <div class="sub-row"><label class="sub-label"><input type="checkbox" onchange="onSubCb(this)"> 교통표지판</label><span class="sub-val" id="obs-cls-traffic_sign"></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 학습 데이터 수집 (장애물 분석 아래) -->
+            <div class="info-card" id="capture-card">
+                <div class="info-card-header" onclick="toggleCard('capture-card')">
+                    <h3>데이터 수집 <span style="font-size:11px; color:var(--fg-mute); font-weight:normal;">5초/장</span></h3>
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="info-card-body">
+                    <div style="padding: 6px 0; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">상태</span>
+                            <span id="capture-card-status" style="font-family:var(--font-mono);">대기</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">저장</span>
+                            <span id="capture-card-count" style="font-family:var(--font-mono);">0장</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px;">
+                            <span style="color:var(--fg-mute);">용량</span>
+                            <span id="capture-card-size" style="font-family:var(--font-mono);">0 / 5120 MB</span>
+                        </div>
+                        <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
+                            <div id="capture-card-bar" style="height:100%; width:0%; background:var(--accent); transition:width 0.3s;"></div>
+                        </div>
+                        <div style="font-size:10px; color:var(--fg-mute); font-family:var(--font-mono); word-break:break-all;"
+                             id="capture-card-folder">data/captures/</div>
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <script>
+        // ── TTS ──
+        let ttsEnabled = true;
+        let _lastTtsMsg = '';
+        let _lastTtsAt  = 0;
+
+        async function toggleDepth() {
+            const res = await fetch('/depth-toggle', { method: 'POST' });
+            const data = await res.json();
+            const on = data.depth_enabled;
+            document.getElementById('depth-dot').classList.toggle('off', !on);
+            document.getElementById('depth-label').textContent = on ? 'Depth on' : 'Depth off';
+        }
+
+        // ── 학습 데이터 캡처 토글 / 상태 폴링 ─────────────────────────
+        async function toggleCapture() {
+            const res = await fetch('/capture/toggle', { method: 'POST' });
+            const data = await res.json();
+            applyCaptureStatus(data);
+        }
+
+        function applyCaptureStatus(s) {
+            const on = s.enabled && !s.auto_disabled;
+            document.getElementById('capture-dot').classList.toggle('off', !on);
+            const dot = document.getElementById('capture-dot');
+            const lbl = document.getElementById('capture-label');
+            if (s.auto_disabled) {
+                lbl.textContent = '데이터 수집 디스크꽉참';
+                dot.style.background = 'var(--bad, #ff453a)';
+            } else if (on) {
+                lbl.textContent = `데이터 수집 on · ${s.total_count}장 (${s.total_mb}MB)`;
+                dot.style.background = '';
+            } else {
+                lbl.textContent = '데이터 수집 off';
+                dot.style.background = '';
+            }
+            // 사이드바 카드 업데이트 (있을 때만)
+            const card = document.getElementById('capture-card');
+            if (card) {
+                document.getElementById('capture-card-status').textContent =
+                    s.auto_disabled ? '디스크 한도 도달 (자동 OFF)' : (on ? '저장 중' : '대기');
+                document.getElementById('capture-card-count').textContent = `${s.total_count}장`;
+                document.getElementById('capture-card-size').textContent =
+                    `${s.total_mb} / ${s.limit_mb} MB`;
+                document.getElementById('capture-card-folder').textContent = s.folder;
+                const pct = Math.min(100, (s.total_mb / s.limit_mb) * 100);
+                document.getElementById('capture-card-bar').style.width = pct + '%';
+            }
+        }
+
+        async function pollCaptureStatus() {
+            try {
+                const r = await fetch('/capture/status');
+                if (!r.ok) return;
+                const s = await r.json();
+                applyCaptureStatus(s);
+            } catch (e) { /* ignore */ }
+        }
+        setInterval(pollCaptureStatus, 5_000);
+        pollCaptureStatus();
+
+        async function toggleOllama() {
+            const res = await fetch('/ollama-toggle', { method: 'POST' });
+            const data = await res.json();
+            const on = data.ollama_enabled;
+            document.getElementById('ollama-dot').classList.toggle('off', !on);
+            document.getElementById('ollama-label').textContent = on ? 'Ollama on' : 'Ollama off';
+        }
+
+        function toggleTts() {
+            ttsEnabled = !ttsEnabled;
+            document.getElementById('tts-dot').classList.toggle('off', !ttsEnabled);
+            document.getElementById('tts-label').textContent = ttsEnabled ? '음성 on' : '음성 off';
+            if (!ttsEnabled) speechSynthesis.cancel();
+        }
+
+        function dashboardSpeak(text) {
+            if (!ttsEnabled) return;
+            if (!text || text === '이상 없음' || text === '대기 중...') return;
+            const now = Date.now();
+            const isDanger = text.includes('위험') || text.includes('접근') || text.includes('빨간불') || text.includes('차도');
+            const interval = isDanger ? 3000 : 6000;
+            if (text === _lastTtsMsg && now - _lastTtsAt < interval) return;
+            _lastTtsMsg = text;
+            _lastTtsAt  = now;
+            speechSynthesis.cancel();
+            const utt = new SpeechSynthesisUtterance(text);
+            utt.lang = 'ko-KR';
+            utt.rate = 1.1;
+            speechSynthesis.speak(utt);
+        }
+
+        // ── 탭별 상태 ──
+        const liveState  = { frameCount: 0, message: '대기 중...', detail: null, analysis: null };
+        const videoState = { frameCount: 0, message: '대기 중...', detail: null, analysis: null };
+
+        let activeTab = 'live';
+        let videoDragging = false;
+
+        // ── 로컬 영상/사진 분석 상태 ──
+        const localVideo   = document.createElement('video');
+        localVideo.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;';
+        document.body.appendChild(localVideo);  // 프레임 디코딩 강제 활성화
+        const captureCanvas = document.createElement('canvas');
+        let isAnalyzing     = false;
+        let captureInterval = null;
+        let captureFrameCount = 0;
+        let lastSegMask     = null;  // 마지막 segment 마스크 이미지
+        let isImageMode     = false; // 사진 파일 여부
+        let fileGeneration  = 0;    // 파일 교체 시 이전 요청 결과 무시용
+        let lastDetections  = [];   // 마지막 탐지 결과 (캔버스 재드로우용)
+
+        function setPlayPauseIcon() {
+            const paused = localVideo.paused || localVideo.ended;
+            el.iconPlay.style.display  = paused ? 'block' : 'none';
+            el.iconPause.style.display = paused ? 'none'  : 'block';
+        }
+
+        // ── 시크바 UI 업데이트 ──
+        function updateProgressUI() {
+            const dur = localVideo.duration || 0;
+            if (!dur) return;
+            const frac = localVideo.currentTime / dur;
+            el.videoProgressFill.style.width     = (frac * 100) + '%';
+            el.videoProgressAnalyzed.style.width = '0%';
+            const wrap   = el.videoProgressBarWrap.getBoundingClientRect();
+            const trackW = wrap.width - 12;
+            el.videoProgressHandle.style.left = (6 + frac * trackW) + 'px';
+            el.videoProgressTime.textContent =
+                `${fmtTime(localVideo.currentTime)} / ${fmtTime(dur)}`;
+        }
+
+        // ── 드래그 시크 ──
+        function getFraction(clientX) {
+            const rect = el.videoProgressBarWrap.getBoundingClientRect();
+            return Math.max(0, Math.min(1, (clientX - rect.left - 6) / (rect.width - 12)));
+        }
+
+        function seekTo(clientX) {
+            const frac = getFraction(clientX);
+            localVideo.currentTime = frac * (localVideo.duration || 0);
+            updateProgressUI();
+        }
+
+        // ── 캔버스에 현재 프레임 + 마지막 결과 그리기 (매 interval마다 실행) ──
+        function drawVideoFrame() {
+            if (localVideo.paused || localVideo.ended) return;
+            captureCanvas.width  = localVideo.videoWidth  || 640;
+            captureCanvas.height = localVideo.videoHeight || 360;
+            captureCanvas.getContext('2d').drawImage(localVideo, 0, 0);
+            _paintLocalCanvas();
+        }
+
+        // 사진/동영상 캔버스 공통 렌더 (drawVideoFrame + triggerRedraw 공유)
+        function _paintLocalCanvas() {
+            const canvas = el.canvasVideo;
+            canvas.width  = captureCanvas.width;
+            canvas.height = captureCanvas.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(captureCanvas, 0, 0);
+            if (lastSegMask) ctx.drawImage(lastSegMask, 0, 0, canvas.width, canvas.height);
+            // 체크박스 필터 적용
+            for (const item of lastDetections) {
+                if (isObsItemVisible(item)) drawObsBox(ctx, item);
+            }
+            el.videoEmpty.classList.add('hidden');
+            canvas.style.display = 'block';
+        }
+
+        // ── 서버 분석 (분석 중이면 skip, 끝나면 결과 저장) ──
+        async function captureAndAnalyze() {
+            drawVideoFrame();  // 항상 현재 프레임 먼저 표시
+
+            if (isAnalyzing) return;  // 서버 요청만 skip
+            isAnalyzing = true;
+            const gen = fileGeneration;
+            try {
+                const blob = await new Promise(r => captureCanvas.toBlob(r, 'image/jpeg', 0.8));
+                if (!blob || gen !== fileGeneration) return;
+
+                // /detect 호출
+                const form = new FormData();
+                form.append('file', new File([blob], 'frame.jpg', { type: 'image/jpeg' }));
+                const detectData = await fetch('/detect', { method: 'POST', body: form })
+                    .then(r => r.json());
+                if (gen !== fileGeneration) return;
+
+                // /segment 호출 (2프레임마다)
+                captureFrameCount++;
+                if (captureFrameCount % 2 === 0) {
+                    const form2 = new FormData();
+                    form2.append('file', new File([blob], 'frame.jpg', { type: 'image/jpeg' }));
+                    fetch('/segment?include_mask=1', { method: 'POST', body: form2 })
+                        .then(r => r.json())
+                        .then(seg => {
+                            if (!seg.mask_b64) return;
+                            const img = new Image();
+                            img.onload = () => { lastSegMask = img; };
+                            img.src = 'data:image/png;base64,' + seg.mask_b64;
+                        }).catch(() => {});
+                }
+
+                // 결과 저장 (다음 drawVideoFrame에서 사용)
+                lastDetections = (detectData.detections || []).map(d => ({
+                    bbox: d.box, group: d.label_ko, cls_name: d.label,
+                    conf: d.confidence, depth_m: d.depth_m, direction: d.direction,
+                }));
+
+                videoState.message = detectData.message || '이상 없음';
+                if (detectData.detail) videoState.detail = detectData.detail;
+                if (detectData.analysis) {
+                    videoState.analysis = detectData.analysis;
+                    if (activeTab === 'video') updateAnalysis(detectData.analysis);
+                }
+                if (activeTab === 'video') setResultMsg(videoState.message, videoState.detail);
+
+            } catch(e) {
+                console.error('[캡처 분석 오류]', e);
+            } finally {
+                isAnalyzing = false;
+            }
+        }
+
+        function startCapture() {
+            if (captureInterval) return;
+            captureInterval = setInterval(captureAndAnalyze, 500);
+        }
+
+        function stopCapture() {
+            clearInterval(captureInterval);
+            captureInterval = null;
+        }
+
+        // ── DOM ──
+        const el = {
+            wsDot:             document.getElementById('ws-dot'),
+            wsText:            document.getElementById('ws-text'),
+            phoneBadge:        document.getElementById('phone-badge'),
+            liveView:          document.getElementById('live-view'),
+            videoView:         document.getElementById('video-view'),
+            liveEmpty:         document.getElementById('live-empty'),
+            videoEmpty:        document.getElementById('video-empty'),
+            liveImg1:          document.getElementById('live-img-1'),
+            liveImg2:          document.getElementById('live-img-2'),
+            slotBtn1:          document.getElementById('slot-btn-1'),
+            slotBtn2:          document.getElementById('slot-btn-2'),
+            slotStatus1:       document.getElementById('slot-status-1'),
+            slotStatus2:       document.getElementById('slot-status-2'),
+            canvasOverlayLive: document.getElementById('canvas-overlay-live'),
+            canvasVideo:       document.getElementById('canvas-video'),
+            videoPanel:        document.getElementById('video-panel'),
+            videoInput:        document.getElementById('video-input'),
+            videoBtn:          document.getElementById('video-btn'),
+            videoFilename:     document.getElementById('video-filename'),
+            videoProgress:        document.getElementById('video-progress'),
+            videoProgressBarWrap: document.getElementById('video-progress-bar-wrap'),
+            videoProgressAnalyzed:document.getElementById('video-progress-analyzed'),
+            videoProgressFill:    document.getElementById('video-progress-fill'),
+            videoProgressHandle:  document.getElementById('video-progress-handle'),
+            videoProgressTime:    document.getElementById('video-progress-time'),
+            videoPlayPause:       document.getElementById('video-play-pause'),
+            iconPlay:             document.getElementById('icon-play'),
+            iconPause:            document.getElementById('icon-pause'),
+            resultMsg:         document.getElementById('result-msg'),
+        };
+
+        // ── 시크바 드래그 이벤트 ──
+        el.videoProgressBarWrap.addEventListener('mousedown', e => {
+            if (!totalFrames) return;
+            videoDragging = true;
+            videoPaused = true;
+            setPlayPauseIcon();
+            el.videoProgressBarWrap.classList.add('dragging');
+            seekTo(e.clientX);
+        });
+        document.addEventListener('mousemove', e => {
+            if (!videoDragging) return;
+            seekTo(e.clientX);
+        });
+        document.addEventListener('mouseup', () => {
+            if (!videoDragging) return;
+            videoDragging = false;
+            el.videoProgressBarWrap.classList.remove('dragging');
+        });
+        el.videoProgressBarWrap.addEventListener('touchstart', e => {
+            if (!totalFrames) return;
+            videoDragging = true;
+            videoPaused = true;
+            setPlayPauseIcon();
+            el.videoProgressBarWrap.classList.add('dragging');
+            seekTo(e.touches[0].clientX);
+        }, { passive: true });
+        document.addEventListener('touchmove', e => {
+            if (!videoDragging) return;
+            seekTo(e.touches[0].clientX);
+        }, { passive: true });
+        document.addEventListener('touchend', () => {
+            videoDragging = false;
+            el.videoProgressBarWrap.classList.remove('dragging');
+        });
+
+        // ── 탭 전환 ──
+        document.getElementById('tab-live').addEventListener('click',  () => switchTab('live'));
+        document.getElementById('tab-video').addEventListener('click', () => switchTab('video'));
+
+        // ── 재생/일시정지 ──
+        el.videoPlayPause.addEventListener('click', () => {
+            if (localVideo.paused || localVideo.ended) {
+                localVideo.play();
+                startCapture();
+            } else {
+                localVideo.pause();
+                stopCapture();
+            }
+            setPlayPauseIcon();
+        });
+
+        localVideo.addEventListener('timeupdate', updateProgressUI);
+        localVideo.addEventListener('ended', () => {
+            stopCapture();
+            setPlayPauseIcon();
+            el.videoBtn.disabled = false;
+            el.videoBtn.textContent = '▶ 재생';
+        });
+
+        function switchTab(mode) {
+            activeTab = mode;
+            const isVideo = mode === 'video';
+
+            // 라이브 탭으로 돌아올 때 영상 캡처 중단 (frame_overlay 간섭 방지)
+            if (!isVideo) {
+                stopCapture();
+                localVideo.pause();
+                setPlayPauseIcon();
+            }
+
+            document.getElementById('tab-live').classList.toggle('active', !isVideo);
+            document.getElementById('tab-video').classList.toggle('active', isVideo);
+            el.liveView.classList.toggle('hidden', isVideo);
+            el.videoView.classList.toggle('hidden', !isVideo);
+            el.videoPanel.classList.toggle('active', isVideo);
+            // 슬롯 토글(서버1/서버2)은 라이브 탭에서만 표시
+            const slotToggle = document.getElementById('slot-toggle');
+            if (slotToggle) slotToggle.style.display = isVideo ? 'none' : '';
+            const st = isVideo ? videoState : liveState;
+            setResultMsg(st.message, st.detail);
+            updateAnalysis(st.analysis);  // 해당 탭의 분석 결과로 복원
+        }
+
+        function setResultMsg(text, detail) {
+            // TTS 메시지
+            el.resultMsg.textContent = text;
+            el.resultMsg.className = 'ai-tts';
+            if (text.includes('🚨') || text.includes('위험') || text.includes('멈추세요'))
+                el.resultMsg.classList.add('danger');
+            else if (text.includes('이상 없음'))
+                el.resultMsg.classList.add('ok');
+            else if (text.includes('⚠️') || text.includes('주의'))
+                el.resultMsg.classList.add('warn');
+            dashboardSpeak(text);
+
+            // 판단 근거
+            const detailEl = document.getElementById('ai-detail');
+            if (!detail) { detailEl.style.display = 'none'; return; }
+            detailEl.style.display = 'flex';
+
+            // 장애물 목록
+            const obsList = document.getElementById('ai-obs-list');
+            obsList.innerHTML = '';
+            const isSafe = text === '이상 없음';
+            if (!detail.obstacles || detail.obstacles.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'ai-detail-row';
+                div.style.color = 'var(--ok)';
+                div.textContent = '✓ 장애물 없음';
+                obsList.appendChild(div);
+            } else {
+                (detail.obstacles || []).forEach(obs => {
+                    const groupColor = { vehicle:'ai-obs-danger', micro:'ai-obs-warn', person:'ai-obs-warn', fixed:'', signal:'' };
+                    const approaching = obs.approaching ? ' 🔴접근' : '';
+                    const dist = obs.depth_m ? ` ${obs.depth_m}m` : '';
+                    const safeTag = isSafe ? ' <span style="color:var(--ok)">(경로 외)</span>' : '';
+                    const div = document.createElement('div');
+                    div.className = 'ai-detail-row ai-obs-item';
+                    div.innerHTML = `<span class="ai-obs-rank">${obs.rank}.</span>
+                        <span class="${groupColor[obs.group]||''}">${obs.direction} ${obs.kr}${dist}${approaching}${safeTag} <span style="color:var(--fg-dim)">(${obs.conf}%)</span></span>`;
+                    obsList.appendChild(div);
+                });
+            }
+
+            // 노면 3구역
+            const zonesRow = document.getElementById('ai-zones-row');
+            const zonesEl = document.getElementById('ai-zones');
+            const zones = detail.surface_zones || {};
+            if (Object.keys(zones).length > 0) {
+                zonesRow.style.display = 'flex';
+                zonesEl.innerHTML = ['왼쪽','정면','오른쪽'].map(z => {
+                    const info = zones[z];
+                    if (!info) return `<span class="ai-zone">${z} -</span>`;
+                    const cls = info.group === 'danger' ? 'danger' : info.group === 'safe' || info.group === 'braille' ? 'safe' : 'caution';
+                    return `<span class="ai-zone ${cls}">${z} ${info.kr}</span>`;
+                }).join('');
+            } else {
+                zonesRow.style.display = 'none';
+            }
+
+            // 회피 방향 (이상 없음일 때는 표시 안 함)
+            const dodgeRow = document.getElementById('ai-dodge-row');
+            const dodgeEl = document.getElementById('ai-dodge');
+            if (detail.dodge && !isSafe) {
+                dodgeRow.style.display = 'flex';
+                dodgeEl.textContent = detail.dodge;
+            } else {
+                dodgeRow.style.display = 'none';
+            }
+        }
+
+        // ── 사이드바 접기/펴기 ──
+        function toggleCard(id) { document.getElementById(id).classList.toggle('collapsed'); }
+
+        // 초 → m:ss 형식
+        function fmtTime(secs) {
+            secs = Math.floor(secs || 0);
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            return `${m}:${String(s).padStart(2, '0')}`;
+        }
+
+        // ── WebSocket ──
+        let ws = null, reconnectDelay = 500;
+
+        function connect() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws/dashboard`);
+            ws.onopen = () => { el.wsDot.dataset.state = 'ok'; el.wsText.textContent = '대시보드 연결됨'; reconnectDelay = 500; };
+            ws.onmessage = (ev) => {
+                let msg;
+                try { msg = JSON.parse(ev.data); }
+                catch(e) { console.error('[WS] JSON 파싱 실패 (크기:', ev.data.length, '):', e); return; }
+                console.log('[WS] 수신:', msg.type, msg.step !== undefined ? `step=${msg.step}` : '');
+                try { handleMessage(msg); }
+                catch(e) { console.error('[WS] handleMessage 오류 (type=' + msg.type + '):', e); }
+            };
+            ws.onclose = () => { el.wsDot.dataset.state = 'warn'; el.wsText.textContent = '재연결 중...'; setTimeout(connect, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 8000); };
+            ws.onerror = () => { el.wsDot.dataset.state = 'err'; el.wsText.textContent = '연결 오류'; };
+        }
+
+        // ── 메시지 처리 ──
+        function handleMessage(msg) {
+            if (msg.type === 'frame') {
+                const isVideo = msg.source === 'video';
+                isVideo ? applyVideoFrame(msg) : applyLiveFrame(msg);
+            } else if (msg.type === 'frame_overlay') {
+                applyLiveOverlay(msg);
+            } else if (msg.type === 'phone_disconnect') {
+                liveState.message = '핸드폰 연결 끊김';
+                if (activeTab === 'live') setResultMsg(liveState.message);
+            }
+        }
+
+        // ── 캔버스 오버레이 렌더링 ──
+        const OBS_COLORS = {
+            vehicle: '#ff4444', micro: '#ff8866', person: '#66b3ff',
+            fixed: '#ffaa44', signal: '#ffe44d',
+        };
+
+        let liveFrameData  = null; // { baseImg, maskImgs:{group→Image}, obstacle_items }
+        let videoFrameData = null;
+
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        async function buildFrameData(msg) {
+            const baseImg = await loadImage(msg.base_image);
+            const clsMaskImgs = {};
+            await Promise.all(Object.entries(msg.surface_masks || {}).map(([cls, src]) =>
+                loadImage(src).then(img => { clsMaskImgs[cls] = img; }).catch(() => {})
+            ));
+            return { baseImg, clsMaskImgs, obstacle_items: msg.obstacle_items || [] };
+        }
+
+        function redrawCanvas(canvas, fd) {
+            if (!fd || !fd.baseImg) return;
+            const img = fd.baseImg;
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            // 노면: 클래스별 서브 체크박스로 제어
+            for (const [cls_name, maskImg] of Object.entries(fd.clsMaskImgs)) {
+                if (isSurfClsVisible(cls_name)) ctx.drawImage(maskImg, 0, 0);
+            }
+            // 장애물: 클래스별 서브 체크박스로 제어
+            for (const item of fd.obstacle_items) {
+                if (isObsItemVisible(item)) drawObsBox(ctx, item);
+            }
+        }
+
+        function isSurfClsVisible(cls_name) {
+            const valEl = document.getElementById('surf-cls-' + cls_name);
+            if (!valEl) return false;
+            const cb = valEl.closest('.sub-row')?.querySelector('input[type="checkbox"]');
+            return cb?.checked ?? false;
+        }
+
+        function isObsItemVisible(item) {
+            const subEl = document.getElementById('obs-cls-' + item.cls_name);
+            if (subEl) {
+                const cb = subEl.closest('.sub-row')?.querySelector('input[type="checkbox"]');
+                if (cb) return cb.checked;
+            }
+            // 서브 체크박스 없는 클래스는 그룹 체크박스 따름
+            const valEl = document.getElementById('obs-' + item.group);
+            if (!valEl) return false;
+            const cb = valEl.closest('.group-row')?.querySelector('.group-header input[type="checkbox"]');
+            return cb?.checked ?? false;
+        }
+
+        function obsLabel(item) {
+            const conf = Math.round((item.conf || 0) * 100);
+            const dist = item.depth_m != null ? ` ${item.depth_m}m` : '';
+            return `${item.cls_name} ${conf}%${dist}`;
+        }
+
+        function drawObsBox(ctx, item) {
+            const [x1, y1, x2, y2] = item.bbox;
+            const color = OBS_COLORS[item.group] || '#ffffff';
+            ctx.fillStyle = color + '22';
+            ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            const label = obsLabel(item);
+            ctx.font = 'bold 12px monospace';
+            const tw = ctx.measureText(label).width;
+            const ty = y1 > 18 ? y1 - 4 : y2 + 14;
+            ctx.fillStyle = color;
+            ctx.fillRect(x1, ty - 13, tw + 8, 16);
+            ctx.fillStyle = '#000';
+            ctx.fillText(label, x1 + 4, ty);
+        }
+
+        function drawObsBoxScaled(ctx, item, sx, sy, ox, oy) {
+            const [x1, y1, x2, y2] = item.bbox;
+            const color = OBS_COLORS[item.group] || '#ffffff';
+            const bx = x1 * sx + ox, by = y1 * sy + oy;
+            const bw = (x2 - x1) * sx,  bh = (y2 - y1) * sy;
+            ctx.fillStyle = color + '22';
+            ctx.fillRect(bx, by, bw, bh);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx, by, bw, bh);
+            const label = obsLabel(item);
+            ctx.font = 'bold 12px monospace';
+            const tw = ctx.measureText(label).width;
+            const ty = by > 18 ? by - 4 : by + bh + 14;
+            ctx.fillStyle = color;
+            ctx.fillRect(bx, ty - 13, tw + 8, 16);
+            ctx.fillStyle = '#000';
+            ctx.fillText(label, bx + 4, ty);
+        }
+
+        function triggerRedraw() {
+            if (activeTab === 'live') {
+                redrawLiveOverlay();
+            } else if (captureCanvas.width > 0) {
+                // 로컬 동영상/사진 모드: captureCanvas에 이미 현재 프레임 있음
+                _paintLocalCanvas();
+            } else {
+                redrawCanvas(el.canvasVideo, videoFrameData);
+            }
+        }
+
+        // 라이브 오버레이 데이터 (슬롯별)
+        const liveOverlayBySlot = { 1: null, 2: null };
+        let activeSlot = 1;
+        const slotState = { 1: { active: false, frameCount: 0 }, 2: { active: false, frameCount: 0 } };
+
+        function activeLiveImg() {
+            return activeSlot === 2 ? el.liveImg2 : el.liveImg1;
+        }
+
+        function applyLiveFrame(msg) {
+            const slot = msg.slot || activeSlot;
+            slotState[slot].frameCount++;
+            if (slot !== activeSlot) return;
+            el.liveEmpty.classList.add('hidden');
+            activeLiveImg().style.display = 'block';
+            el.canvasOverlayLive.style.display = 'block';
+            el.phoneBadge.textContent = `서버${slot} · ${slotState[slot].frameCount}`;
+            el.phoneBadge.style.background = 'rgba(48,209,88,0.15)';
+            el.phoneBadge.style.color = 'var(--ok)';
+        }
+
+        async function applyLiveOverlay(msg) {
+            // 영상/사진 탭 캡처 중 서버가 보낸 frame_overlay → 라이브 탭에 간섭 방지
+            if (activeTab !== 'live') return;
+
+            const slot = msg.slot || 1;
+            slotState[slot].frameCount++;
+
+            // 다른 슬롯 데이터는 캐싱만 하고 화면 갱신은 안 함
+            if (slot !== activeSlot) {
+                const clsMaskImgs = {};
+                await Promise.all(Object.entries(msg.surface_masks || {}).map(([cls, src]) =>
+                    loadImage(src).then(img => { clsMaskImgs[cls] = img; }).catch(() => {})
+                ));
+                liveOverlayBySlot[slot] = {
+                    clsMaskImgs,
+                    obstacle_items: msg.obstacle_items || [],
+                    img_width: msg.img_width || 0,
+                    img_height: msg.img_height || 0,
+                    message: msg.message || '',
+                    detail: msg.detail || {},
+                    analysis: msg.analysis || {},
+                };
+                return;
+            }
+
+            // 첫 overlay 수신 시 MJPEG img 표시
+            el.liveEmpty.classList.add('hidden');
+            activeLiveImg().style.display = 'block';
+            el.canvasOverlayLive.style.display = 'block';
+
+            const clsMaskImgs = {};
+            await Promise.all(Object.entries(msg.surface_masks || {}).map(([cls, src]) =>
+                loadImage(src).then(img => { clsMaskImgs[cls] = img; }).catch(() => {})
+            ));
+            liveOverlayBySlot[slot] = {
+                clsMaskImgs,
+                obstacle_items: msg.obstacle_items || [],
+                img_width: msg.img_width || 0,
+                img_height: msg.img_height || 0,
+                message: msg.message || '',
+                detail: msg.detail || {},
+                analysis: msg.analysis || {},
+            };
+            redrawLiveOverlay();
+            const cur = liveOverlayBySlot[activeSlot];
+            if (cur) {
+                liveState.message  = cur.message  || liveState.message;
+                liveState.detail   = cur.detail   || liveState.detail;
+                liveState.analysis = cur.analysis || liveState.analysis;
+            }
+            if (activeTab === 'live') {
+                updateAnalysis(liveState.analysis);
+                setResultMsg(liveState.message, liveState.detail);
+            }
+            el.phoneBadge.textContent = `서버${slot} · ${slotState[slot].frameCount}`;
+            el.phoneBadge.style.background = 'rgba(48,209,88,0.15)';
+            el.phoneBadge.style.color = 'var(--ok)';
+        }
+
+        function getLetterboxRect(cw, ch, imgW, imgH) {
+            if (!imgW || !imgH) return { x: 0, y: 0, w: cw, h: ch };
+            const imgAspect = imgW / imgH;
+            const ctnAspect = cw / ch;
+            if (imgAspect > ctnAspect) {
+                const h = cw / imgAspect;
+                return { x: 0, y: (ch - h) / 2, w: cw, h };
+            } else {
+                const w = ch * imgAspect;
+                return { x: (cw - w) / 2, y: 0, w, h: ch };
+            }
+        }
+
+        function redrawLiveOverlay() {
+            const data = liveOverlayBySlot[activeSlot];
+            if (!data) {
+                // 활성 슬롯 데이터 없음 → 캔버스 비우기
+                const canvas = el.canvasOverlayLive;
+                if (canvas.getContext) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+            const canvas = el.canvasOverlayLive;
+            const container = el.liveView;
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            canvas.width = cw;
+            canvas.height = ch;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, cw, ch);
+
+            const { img_width: imgW, img_height: imgH } = data;
+            const rect = getLetterboxRect(cw, ch, imgW, imgH);
+
+            for (const [cls, maskImg] of Object.entries(data.clsMaskImgs)) {
+                if (isSurfClsVisible(cls)) {
+                    ctx.drawImage(maskImg, rect.x, rect.y, rect.w, rect.h);
+                }
+            }
+            const sx = rect.w / (imgW || rect.w);
+            const sy = rect.h / (imgH || rect.h);
+            for (const item of data.obstacle_items) {
+                if (isObsItemVisible(item)) {
+                    drawObsBoxScaled(ctx, item, sx, sy, rect.x, rect.y);
+                }
+            }
+        }
+
+        // ── 슬롯 토글 + 상태 폴링 ─────────────────────────────────────────
+        function switchSlot(slot) {
+            if (slot !== 1 && slot !== 2) return;
+            activeSlot = slot;
+            el.slotBtn1.classList.toggle('active', slot === 1);
+            el.slotBtn2.classList.toggle('active', slot === 2);
+            el.liveImg1.style.display = (slot === 1 && slotState[1].active) ? 'block' : 'none';
+            el.liveImg2.style.display = (slot === 2 && slotState[2].active) ? 'block' : 'none';
+
+            const cur = liveOverlayBySlot[slot];
+            if (cur) {
+                liveState.message  = cur.message  || '';
+                liveState.detail   = cur.detail   || {};
+                liveState.analysis = cur.analysis || {};
+                if (activeTab === 'live') {
+                    updateAnalysis(liveState.analysis);
+                    setResultMsg(liveState.message, liveState.detail);
+                }
+                el.liveEmpty.classList.add('hidden');
+                el.canvasOverlayLive.style.display = 'block';
+            } else if (!slotState[slot].active) {
+                el.liveEmpty.classList.remove('hidden');
+                el.canvasOverlayLive.style.display = 'none';
+            }
+            redrawLiveOverlay();
+        }
+        el.slotBtn1.addEventListener('click', () => switchSlot(1));
+        el.slotBtn2.addEventListener('click', () => switchSlot(2));
+
+        async function pollSlotStatus() {
+            try {
+                const r = await fetch('/camera/slots');
+                if (!r.ok) return;
+                const data = await r.json();
+                for (const s of data.slots || []) {
+                    const slot = s.slot;
+                    const wasActive = slotState[slot].active;
+                    slotState[slot].active = !!s.active;
+                    const dot = document.querySelector(`#slot-btn-${slot} .slot-dot`);
+                    if (dot) dot.dataset.state = s.active ? 'active' : 'empty';
+                    const status = slot === 1 ? el.slotStatus1 : el.slotStatus2;
+                    if (status) status.textContent = s.active ? '연결됨' : '비어있음';
+
+                    // 슬롯이 비워졌으면 해당 슬롯 캐시·이미지 정리
+                    if (wasActive && !s.active) {
+                        liveOverlayBySlot[slot] = null;
+                        slotState[slot].frameCount = 0;
+                        if (slot === activeSlot) {
+                            el.liveEmpty.classList.remove('hidden');
+                            activeLiveImg().style.display = 'none';
+                            el.canvasOverlayLive.style.display = 'none';
+                            el.phoneBadge.textContent = '대기 중';
+                            el.phoneBadge.style.background = 'rgba(255,242,0,0.12)';
+                            el.phoneBadge.style.color = 'var(--accent)';
+                        }
+                    }
+                }
+            } catch (e) { /* 무시 */ }
+        }
+        setInterval(pollSlotStatus, 2_000);
+        pollSlotStatus();
+
+        async function applyVideoFrame(msg) {
+            // 프레임 버퍼에 저장
+            frameBuffer[msg.step] = msg;
+            analyzedUpTo = Math.max(analyzedUpTo, msg.step);
+
+            // 분석 진행 바 업데이트 (항상)
+            if (totalFrames) {
+                el.videoProgressAnalyzed.style.width = (analyzedUpTo / totalFrames * 100) + '%';
+            }
+
+            // 일시정지·드래그 중이면 재생 위치 변경 안 함
+            if (videoPaused || videoDragging) return;
+
+            // 재생 위치를 분석 따라 이동
+            playbackFrame = msg.step;
+            updateProgressUI();
+            el.videoEmpty.classList.add('hidden');
+            el.canvasVideo.style.display = 'block';
+            videoFrameData = await buildFrameData(msg);
+            redrawCanvas(el.canvasVideo, videoFrameData);
+            updateAnalysis(msg.analysis);
+
+            videoState.frameCount++;
+            videoState.message = msg.message || videoState.message;
+            videoState.detail  = msg.detail  || videoState.detail;
+            if (activeTab === 'video') {
+                setResultMsg(videoState.message, videoState.detail);
+                el.phoneBadge.textContent = `분석 중 · ${videoState.frameCount}`;
+                el.phoneBadge.style.background = 'rgba(255,242,0,0.15)';
+                el.phoneBadge.style.color = 'var(--accent)';
+            }
+        }
+
+        // ── 파일 선택 (영상 / 사진 공통) ──
+        el.videoInput.addEventListener('change', () => {
+            const file = el.videoInput.files[0];
+            if (!file) return;
+            el.videoFilename.textContent = file.name;
+
+            // 이전 재생 정지 & 상태 초기화
+            stopCapture();
+            localVideo.pause();
+            if (localVideo.src) URL.revokeObjectURL(localVideo.src);
+            captureFrameCount = 0;
+            lastSegMask = null;
+            lastDetections = [];
+            isAnalyzing = false;
+            fileGeneration++;           // 이전 in-flight 요청 결과 무시
+            videoState.message = '대기 중...';
+            el.canvasVideo.style.display = 'none';
+            el.videoEmpty.classList.remove('hidden');
+            el.videoProgress.style.display = 'none';
+
+            isImageMode = file.type.startsWith('image/');
+
+            if (isImageMode) {
+                // ── 사진: 즉시 캔버스에 그리고 /detect 한 번 호출 ──
+                el.videoBtn.disabled = true;
+                el.videoBtn.textContent = '분석 중...';
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                const imageGen = fileGeneration;
+                img.onload = async () => {
+                    if (imageGen !== fileGeneration) return;
+                    // captureCanvas에 이미지 그리기 → _paintLocalCanvas가 올바르게 동작
+                    captureCanvas.width  = img.naturalWidth;
+                    captureCanvas.height = img.naturalHeight;
+                    captureCanvas.getContext('2d').drawImage(img, 0, 0);
+                    _paintLocalCanvas();
+                    URL.revokeObjectURL(url);
+
+                    // /detect 호출
+                    try {
+                        const blob = await new Promise(r => captureCanvas.toBlob(r, 'image/jpeg', 0.9));
+                        if (imageGen !== fileGeneration) return;
+                        const form = new FormData();
+                        form.append('file', new File([blob], 'image.jpg', { type: 'image/jpeg' }));
+                        const detectData = await fetch('/detect', { method: 'POST', body: form }).then(r => r.json());
+
+                        // /segment 호출
+                        const form2 = new FormData();
+                        form2.append('file', new File([blob], 'image.jpg', { type: 'image/jpeg' }));
+                        // /segment 결과 오면 lastSegMask 갱신 후 재렌더
+                        fetch('/segment?include_mask=1', { method: 'POST', body: form2 }).then(r => r.json()).then(seg => {
+                            if (!seg.mask_b64) return;
+                            const maskImg = new Image();
+                            maskImg.onload = () => { lastSegMask = maskImg; _paintLocalCanvas(); };
+                            maskImg.src = 'data:image/png;base64,' + seg.mask_b64;
+                        }).catch(() => {});
+
+                        // /detect 결과로 bbox 먼저 표시 (체크박스 필터 적용)
+                        lastDetections = (detectData.detections || []).map(d => ({
+                            bbox: d.box, group: d.label_ko, cls_name: d.label,
+                            conf: d.confidence, depth_m: d.depth_m, direction: d.direction,
+                        }));
+                        _paintLocalCanvas();
+                        videoState.message = detectData.message || '이상 없음';
+                        if (detectData.detail) videoState.detail = detectData.detail;
+                        if (detectData.analysis) {
+                            videoState.analysis = detectData.analysis;
+                            if (activeTab === 'video') updateAnalysis(detectData.analysis);
+                        }
+                        if (activeTab === 'video') setResultMsg(videoState.message, videoState.detail);
+                    } catch(e) {
+                        console.error('[사진 분석 오류]', e);
+                    }
+                    el.videoBtn.disabled = false;
+                    el.videoBtn.textContent = '다시 분석';
+                };
+                img.src = url;
+            } else {
+                // ── 동영상: 로드 후 재생 버튼 활성화 ──
+                localVideo.src = URL.createObjectURL(file);
+                localVideo.load();
+                el.videoBtn.disabled = false;
+                el.videoBtn.textContent = '▶ 재생';
+            }
+        });
+
+        // ── 재생 버튼 ──
+        el.videoBtn.addEventListener('click', () => {
+            if (isImageMode) {
+                // 사진: 다시 분석 (파일 재선택 트리거)
+                el.videoInput.dispatchEvent(new Event('change'));
+                return;
+            }
+            if (!localVideo.src) return;
+            el.videoProgress.style.display = 'block';
+            el.videoBtn.disabled = true;
+            localVideo.play();
+            startCapture();
+            setPlayPauseIcon();
+        });
+
+// ── 분석 카드 체크박스 ──
+        function onGroupCb(cb) {
+            const groupRow = cb.closest('.group-row');
+            const header = groupRow.querySelector('.group-header');
+            header.classList.toggle('dimmed', !cb.checked);
+            header.classList.toggle('active', cb.checked);
+            // 하위 체크박스 연동
+            groupRow.querySelectorAll('.sub-row input[type="checkbox"]').forEach(subCb => {
+                subCb.checked = cb.checked;
+                onSubCb(subCb);
+            });
+            triggerRedraw();
+        }
+        function onSubCb(cb) {
+            const row = cb.closest('.sub-row');
+            row.classList.toggle('dimmed', !cb.checked);
+            row.classList.toggle('active', cb.checked);
+            triggerRedraw();
+        }
+        function toggleExpand(btn) {
+            const subList = btn.closest('.group-row').querySelector('.sub-list');
+            const nowOpen = subList.classList.toggle('open');
+            btn.classList.toggle('open', nowOpen);
+        }
+        function selectAllCard(cardId, checked) {
+            document.getElementById(cardId).querySelectorAll('.group-row').forEach(row => {
+                const groupCb = row.querySelector('.group-header input[type="checkbox"]');
+                if (groupCb) { groupCb.checked = checked; onGroupCb(groupCb); }
+            });
+        }
+
+        // ── 분석 상세 업데이트 ──
+        const KR_GROUP_OBS = { vehicle:'차량', micro:'개인이동장치', person:'사람/동물', fixed:'고정장애물', signal:'신호등/표지판', other:'기타' };
+        const KR_SURF = { safe:'인도', braille:'점자블록', caution:'주의구역', danger:'차도', bike:'자전거도로', neutral:'기타' };
+        const KR_LABEL = {
+            car:'승용차', bus:'버스', truck:'트럭', motorcycle:'오토바이',
+            bicycle:'자전거', scooter:'스쿠터',
+            person:'사람', cat:'고양이', dog:'개',
+            stroller:'유모차', wheelchair:'휠체어', carrier:'리어카', movable_signage:'이동식 안내판',
+            barricade:'바리케이드', bench:'벤치', bollard:'볼라드', fire_hydrant:'소화전',
+            kiosk:'키오스크', pole:'기둥', tree_trunk:'가로수', traffic_light:'신호등',
+            traffic_sign:'교통표지판', stop:'정류장',
+            roadway_normal:'차도', roadway_crosswalk:'차도 횡단보도',
+            alley_normal:'골목길', alley_speed_bump:'과속방지턱',
+            sidewalk_asphalt:'인도', sidewalk_blocks:'인도', sidewalk_cement:'인도',
+            sidewalk_urethane:'인도', sidewalk_soil_stone:'인도', sidewalk_other:'인도',
+            sidewalk_damaged:'파손 인도',
+            braille_guide_blocks_normal:'점자블록', braille_guide_blocks_damaged:'파손 점자블록',
+            caution_zone_manhole:'맨홀', caution_zone_stairs:'계단',
+            caution_zone_repair_zone:'공사 구역', bike_lane:'자전거 도로',
+        };
+
+        function updateAnalysis(analysis) {
+            if (!analysis) return;
+
+            // ── 노면 ──
+            const surf = analysis.surface || {};
+            if (surf.available) {
+                const fz = surf.foot_zone;
+                document.getElementById('surf-foot').innerHTML = fz
+                    ? `발 앞: <span>${KR_LABEL[fz.cls_name] || KR_SURF[fz.group] || fz.cls_name} (${fz.pct.toFixed(0)}%)</span>`
+                    : '발 앞: <span>탐지 없음</span>';
+
+                const ratios = surf.group_ratios || {};
+                ['safe','braille','caution','danger','bike'].forEach(g => {
+                    const e = document.getElementById('surf-' + g);
+                    if (e) e.textContent = ratios[g] ? ratios[g].toFixed(1) + '%' : '';
+                });
+
+                const classRatios = surf.class_ratios || {};
+                Object.entries(classRatios).forEach(([cls, pct]) => {
+                    const e = document.getElementById('surf-cls-' + cls);
+                    if (e) e.textContent = pct > 0.1 ? pct.toFixed(1) + '%' : '';
+                });
+            }
+
+            // ── 장애물 ──
+            const obs = analysis.obstacle || {};
+            if (obs.available) {
+                if (obs.top) {
+                    const t = obs.top;
+                    const prox = t.area_pct > 15 ? '매우 가까이' : t.area_pct > 5 ? '가까이' : '앞에';
+                    document.getElementById('obs-top').innerHTML =
+                        `최우선: <span>${KR_GROUP_OBS[t.group] || t.group} · ${prox} (${KR_LABEL[t.cls_name] || t.cls_name})</span>`;
+                } else {
+                    document.getElementById('obs-top').innerHTML = '최우선: <span>탐지 없음</span>';
+                }
+
+                const counts = obs.counts || {};
+                ['vehicle','micro','person','fixed','signal'].forEach(g => {
+                    const e = document.getElementById('obs-' + g);
+                    if (e) e.textContent = counts[g] ? counts[g] + '개' : '';
+                });
+
+                const classCounts = obs.class_counts || {};
+                Object.entries(classCounts).forEach(([cls, cnt]) => {
+                    const e = document.getElementById('obs-cls-' + cls);
+                    if (e) e.textContent = cnt > 0 ? cnt + '개' : '';
+                });
+            }
+        }
+
+        connect();
+    </script>
+</body>
+</html>

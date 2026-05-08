@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚶 보행자 네비게이션 (T-map)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .search-box label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #FF6B6B;
+            box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+        }
+
+        .results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #FF6B6B;
+            border-radius: 10px;
+            margin-top: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .result-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .result-item:hover {
+            background: #fff5f5;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .result-address {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .btn {
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            background: #FF6B6B;
+            color: white;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            background: #ff5252;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #4CAF50;
+        }
+
+        .btn-secondary:hover {
+            background: #45a049;
+        }
+
+        .btn-stop {
+            background: #f44336;
+        }
+
+        .btn-stop:hover {
+            background: #da190b;
+        }
+
+        #map {
+            width: 100%;
+            height: 400px;
+            border-radius: 12px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: none;
+        }
+
+        #map.show {
+            display: block;
+        }
+
+        .gps-status {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .gps-status.show {
+            display: block;
+        }
+
+        .gps-status.active {
+            background: #c8e6c9;
+        }
+
+        .current-step {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .current-step.show {
+            display: block;
+        }
+
+        .current-step h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.5em;
+        }
+
+        .current-step .distance-remaining {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #ff5722;
+            margin-top: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #FF6B6B;
+            font-weight: 600;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #FF6B6B;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .result-box {
+            background: #fff5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-box h3 {
+            color: #FF6B6B;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .route-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #FF6B6B;
+        }
+
+        .route-info {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+
+        .route-info-item {
+            flex: 1;
+        }
+
+        .route-info-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .route-info-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #FF6B6B;
+        }
+
+        .steps {
+            margin-top: 20px;
+        }
+
+        .step {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #FF6B6B;
+        }
+
+        .step.current {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #FF6B6B;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 25px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .step.current .step-number {
+            background: #ffc107;
+        }
+
+        .step-instruction {
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .step-distance {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .route-info {
+                flex-direction: column;
+            }
+
+            .route-info-item {
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body onload="initApp();">
+    <div class="container">
+        <h1>🚶 보행자 네비게이션</h1>
+        <p class="subtitle">T-map으로 정확하게 안내합니다</p>
+
+        <div class="search-box">
+            <label>📍 출발지</label>
+            <input type="text" id="start" placeholder="출발지 검색 (예: 포천시청)" autocomplete="off">
+            <div id="startResults" class="results"></div>
+        </div>
+
+        <div class="search-box">
+            <label>🎯 목적지</label>
+            <input type="text" id="end" placeholder="목적지 검색 (예: 포천아트밸리)" autocomplete="off">
+            <div id="endResults" class="results"></div>
+        </div>
+
+        <button class="btn" onclick="getDirections()" id="routeBtn">🚶 경로 찾기</button>
+
+        <button class="btn btn-secondary" onclick="startNavigation()" id="navBtn" style="display: none;">
+            🧭 실시간 안내 시작
+        </button>
+
+        <button class="btn btn-stop" onclick="stopNavigation()" id="stopBtn" style="display: none;">
+            ⏹️ 안내 중지
+        </button>
+
+        <div id="gpsStatus" class="gps-status">
+            <div><strong>GPS 상태:</strong> <span id="gpsText">대기중</span></div>
+            <div><strong>현재 위치:</strong> <span id="currentLocation">-</span></div>
+        </div>
+
+        <div id="currentStep" class="current-step">
+            <h3 id="currentInstruction">안내를 시작합니다</h3>
+            <div class="distance-remaining" id="distanceRemaining"></div>
+        </div>
+
+        <div id="map"></div>
+
+        <div id="result"></div>
+    </div>
+
+    <script
+        src="https://apis.openapi.sk.com/tmap/jsv2?version=1&appKey=uJiu58Nc89agazFFxqM3lM4u2zv0qtp8XJbQpf9h"></script>
+
+    <script>
+        var selectedStart = null;
+        var selectedEnd = null;
+        var searchTimeout = null;
+        var routeData = null;
+        var currentStepIndex = 0;
+        var watchId = null;
+        var map = null;
+        var marker = null;
+        var pathData = null;
+        var tmapReady = false;
+
+        // 앱 초기화 (body onload에서 호출)
+        function initApp() {
+            if (window.Tmapv2 && window.Tmapv2.Map) {
+                tmapReady = true;
+                console.log('✅ T-map SDK 준비 완료');
+                setupEventListeners();
+            } else {
+                console.error('❌ T-map SDK 로드 실패');
+                alert('T-map SDK를 로드할 수 없습니다. API 키를 확인하세요.');
+            }
+        }
+
+        // 이벤트 리스너 등록
+        function setupEventListeners() {
+            document.getElementById('start').addEventListener('input', function (e) {
+                clearTimeout(searchTimeout);
+                var query = e.target.value.trim();
+                if (query.length < 2) {
+                    hideResults('start');
+                    return;
+                }
+                searchTimeout = setTimeout(function () { search(query, 'start'); }, 500);
+            });
+
+            document.getElementById('end').addEventListener('input', function (e) {
+                clearTimeout(searchTimeout);
+                var query = e.target.value.trim();
+                if (query.length < 2) {
+                    hideResults('end');
+                    return;
+                }
+                searchTimeout = setTimeout(function () { search(query, 'end'); }, 500);
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.search-box')) {
+                    hideResults('start');
+                    hideResults('end');
+                }
+            });
+        }
+
+        async function search(query, type) {
+            try {
+                var res = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                var data = await res.json();
+                if (data.success && data.results.length > 0) {
+                    showResults(data.results, type);
+                } else {
+                    hideResults(type);
+                }
+            } catch (err) {
+                console.error('검색 오류:', err);
+            }
+        }
+
+        function showResults(results, type) {
+            var div = document.getElementById(type + 'Results');
+            var html = '';
+            results.forEach(function (r, i) {
+                html += '<div class="result-item" onclick="select(' + i + ', \'' + type + '\')"><div class="result-name">' + r.name + '</div><div class="result-address">' + r.address + '</div></div>';
+            });
+            div.innerHTML = html;
+            div.classList.add('show');
+            window[type + 'Data'] = results;
+        }
+
+        function hideResults(type) {
+            document.getElementById(type + 'Results').classList.remove('show');
+        }
+
+        function select(i, type) {
+            var result = window[type + 'Data'][i];
+            if (type === 'start') {
+                selectedStart = result;
+                document.getElementById('start').value = result.name;
+            } else {
+                selectedEnd = result;
+                document.getElementById('end').value = result.name;
+            }
+            hideResults(type);
+        }
+
+        function initMap(startLat, startLng, endLat, endLng) {
+            if (!tmapReady) {
+                console.error('T-map SDK가 준비되지 않았습니다');
+                return;
+            }
+
+            // 기존 지도 제거
+            if (map) {
+                map.destroy();
+            }
+
+            // 지도 div 보이게
+            document.getElementById('map').classList.add('show');
+
+            // 새 지도 생성
+            map = new Tmapv2.Map("map", {
+                center: new Tmapv2.LatLng(startLat, startLng),
+                width: "100%",
+                height: "400px",
+                zoom: 15
+            });
+            console.log('✅ 지도 생성됨');
+
+            new Tmapv2.Marker({
+                position: new Tmapv2.LatLng(startLat, startLng),
+                icon: "/upload/tmap/marker/pin_r_m_s.png",
+                iconSize: new Tmapv2.Size(24, 38),
+                map: map
+            });
+
+            new Tmapv2.Marker({
+                position: new Tmapv2.LatLng(endLat, endLng),
+                icon: "/upload/tmap/marker/pin_r_m_e.png",
+                iconSize: new Tmapv2.Size(24, 38),
+                map: map
+            });
+        }
+
+        function drawRoute(pathCoords) {
+            if (!tmapReady || !map || !pathCoords || pathCoords.length === 0) return;
+
+            var tmapCoords = pathCoords.map(function (c) {
+                return new Tmapv2.LatLng(c[0], c[1]);
+            });
+
+            new Tmapv2.Polyline({
+                path: tmapCoords,
+                strokeColor: "#FF6B6B",
+                strokeWeight: 6,
+                map: map
+            });
+
+            var bounds = new Tmapv2.LatLngBounds();
+            tmapCoords.forEach(function (coord) { bounds.extend(coord); });
+            map.fitBounds(bounds);
+
+            pathData = pathCoords;
+        }
+
+        async function getDirections() {
+            if (!selectedStart || !selectedEnd) {
+                alert('출발지와 목적지를 검색해서 선택하세요');
+                return;
+            }
+
+            if (!tmapReady) {
+                alert('T-map SDK가 아직 로딩중입니다. 잠시 후 다시 시도하세요.');
+                return;
+            }
+
+            var resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div>보행 경로 계산 중...</div>';
+            document.getElementById('routeBtn').disabled = true;
+
+            var start = selectedStart.lat + ',' + selectedStart.lng;
+            var end = selectedEnd.lat + ',' + selectedEnd.lng;
+
+            try {
+                var res = await fetch('/api/directions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start: start, end: end })
+                });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    routeData = data;
+                    currentStepIndex = 0;
+
+                    initMap(selectedStart.lat, selectedStart.lng, selectedEnd.lat, selectedEnd.lng);
+
+                    if (data.path_coords) {
+                        drawRoute(data.path_coords);
+                    }
+
+                    var html = '<div class="result-box"><h3>🎯 보행 경로</h3><div class="route-summary"><div class="route-info"><div class="route-info-item"><div class="route-info-label">총 거리</div><div class="route-info-value">' + data.distance_text + '</div></div><div class="route-info-item"><div class="route-info-label">예상 시간</div><div class="route-info-value">' + data.duration_text + '</div></div></div></div>';
+
+                    if (data.steps && data.steps.length > 0) {
+                        html += '<div class="steps" id="stepsList"><h4 style="margin-bottom: 15px; color: #333;">턴바이턴 안내</h4>';
+                        data.steps.forEach(function (step, i) {
+                            html += '<div class="step" id="step-' + i + '"><div class="step-instruction"><span class="step-number">' + (i + 1) + '</span>' + step.instruction + '</div><div class="step-distance">' + step.distance + ' · ' + step.duration + '</div></div>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                    resultDiv.innerHTML = html;
+                    document.getElementById('navBtn').style.display = 'block';
+
+                    if (data.audio) {
+                        new Audio('data:audio/mp3;base64,' + data.audio).play();
+                    }
+                } else {
+                    resultDiv.innerHTML = '<div class="status error">❌ ' + (data.detail || '경로를 찾을 수 없습니다') + '</div>';
+                }
+            } catch (err) {
+                resultDiv.innerHTML = '<div class="status error">❌ 오류: ' + err.message + '</div>';
+            } finally {
+                document.getElementById('routeBtn').disabled = false;
+            }
+        }
+
+        function startNavigation() {
+            if (!routeData || !routeData.steps || routeData.steps.length === 0) {
+                alert('먼저 경로를 찾으세요');
+                return;
+            }
+            if (!navigator.geolocation) {
+                alert('GPS를 지원하지 않는 브라우저입니다');
+                return;
+            }
+
+            watchId = navigator.geolocation.watchPosition(
+                updatePosition,
+                handleGPSError,
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+            );
+
+            document.getElementById('gpsStatus').classList.add('show', 'active');
+            document.getElementById('gpsText').textContent = '추적 중...';
+            document.getElementById('currentStep').classList.add('show');
+            document.getElementById('navBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block';
+            updateCurrentStep();
+        }
+
+        function updatePosition(position) {
+            if (!tmapReady) return;
+
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+            document.getElementById('currentLocation').textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+
+            if (marker) {
+                marker.setPosition(new Tmapv2.LatLng(lat, lng));
+            } else if (map) {
+                marker = new Tmapv2.Marker({
+                    position: new Tmapv2.LatLng(lat, lng),
+                    icon: "http://topopen.tmap.co.kr/imgs/point.png",
+                    iconSize: new Tmapv2.Size(24, 38),
+                    map: map
+                });
+            }
+            checkNextStep(lat, lng);
+        }
+
+        function handleGPSError(error) {
+            console.error('GPS 오류:', error);
+            document.getElementById('gpsText').textContent = 'GPS 오류';
+        }
+
+        function updateCurrentStep() {
+            if (currentStepIndex >= routeData.steps.length) {
+                document.getElementById('currentInstruction').textContent = '🎉 목적지에 도착했습니다!';
+                document.getElementById('distanceRemaining').textContent = '';
+                speak('목적지에 도착했습니다');
+                stopNavigation();
+                return;
+            }
+
+            var step = routeData.steps[currentStepIndex];
+            document.getElementById('currentInstruction').textContent = step.instruction;
+            document.getElementById('distanceRemaining').textContent = step.distance + ' 남음';
+
+            document.querySelectorAll('.step').forEach(function (s) { s.classList.remove('current'); });
+            var stepEl = document.getElementById('step-' + currentStepIndex);
+            if (stepEl) {
+                stepEl.classList.add('current');
+                stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            speak(step.instruction);
+        }
+
+        function checkNextStep(lat, lng) {
+            if (!pathData || pathData.length === 0) return;
+
+            var minDist = Infinity;
+            var closestIndex = 0;
+            pathData.forEach(function (point, i) {
+                var dist = getDistance(lat, lng, point[0], point[1]);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestIndex = i;
+                }
+            });
+
+            var progress = closestIndex / pathData.length;
+            var stepProgress = (currentStepIndex + 1) / routeData.steps.length;
+
+            if (progress > stepProgress && currentStepIndex < routeData.steps.length - 1) {
+                currentStepIndex++;
+                updateCurrentStep();
+            }
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            var R = 6371e3;
+            var φ1 = lat1 * Math.PI / 180;
+            var φ2 = lat2 * Math.PI / 180;
+            var Δφ = (lat2 - lat1) * Math.PI / 180;
+            var Δλ = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                var utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = 0.9;
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function stopNavigation() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            document.getElementById('gpsStatus').classList.remove('active');
+            document.getElementById('gpsText').textContent = '중지됨';
+            document.getElementById('currentStep').classList.remove('show');
+            document.getElementById('navBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            if (marker && map) {
+                marker.setMap(null);
+                marker = null;
+            }
+        }
+    </script>
+</body>
+
+</html>

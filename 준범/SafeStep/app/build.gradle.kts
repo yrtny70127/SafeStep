@@ -52,6 +52,7 @@ dependencies {
 
     // HTTP 클라이언트 (서버 통신용)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // 지도 (OpenStreetMap, API 키 불필요)
     implementation("org.osmdroid:osmdroid-android:6.1.18")

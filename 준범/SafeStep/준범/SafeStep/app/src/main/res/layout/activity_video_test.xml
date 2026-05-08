@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#141414">
+
+    <!-- 동영상 + 바운딩박스 오버레이 영역 -->
+    <FrameLayout
+        android:id="@+id/videoContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/controlBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 동영상 플레이어 -->
+        <VideoView
+            android:id="@+id/videoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
+
+        <!-- 노면 세그멘테이션 마스크 오버레이 -->
+        <ImageView
+            android:id="@+id/segmentOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:alpha="0.6"
+            android:background="@android:color/transparent" />
+
+        <!-- 바운딩박스 오버레이 -->
+        <com.safestep.app.BoundingBoxOverlay
+            android:id="@+id/bboxOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent" />
+
+        <!-- 위험 경고 배너 -->
+        <LinearLayout
+            android:id="@+id/warningBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="#F97316"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/dot_white" />
+
+            <TextView
+                android:id="@+id/warningText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="앞에 사람 접근 중"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- 동영상 미선택 안내 -->
+        <LinearLayout
+            android:id="@+id/emptyView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎬"
+                android:textSize="64sp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="동영상을 선택해주세요"
+                android:textColor="#6E6E73"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- 하단 컨트롤 바 -->
+    <LinearLayout
+        android:id="@+id/controlBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#1C1C1E"
+        android:orientation="vertical"
+        android:padding="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 감지 상태 텍스트 -->
+        <TextView
+            android:id="@+id/detectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="동영상을 선택하면 탐지가 시작됩니다"
+            android:textColor="#AEAEB2"
+            android:textSize="12sp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="10dp" />
+
+        <!-- 버튼 행 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- 동영상 선택 버튼 -->
+            <Button
+                android:id="@+id/selectVideoButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="동영상 선택"
+                android:textSize="14sp"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#F97316"
+                app:cornerRadius="24dp" />
+
+            <!-- 재생 / 일시정지 버튼 -->
+            <Button
+                android:id="@+id/playPauseButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="▶ 재생"
+                android:textSize="14sp"
+                android:textColor="#F97316"
+                android:enabled="false"
+                app:backgroundTint="#2C2C2E"
+                app:strokeColor="#F97316"
+                app:strokeWidth="2dp"
+                app:cornerRadius="24dp" />
+
+        </LinearLayout>
+
+        <!-- 뒤로가기 -->
+        <Button
+            android:id="@+id/backButton"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:text="← 모드 선택으로 돌아가기"
+            android:textSize="13sp"
+            android:textColor="#6E6E73"
+            app:backgroundTint="#141414" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

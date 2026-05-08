@@ -1,0 +1,34 @@
+path: /mnt/d/project/team2_bbox
+train: data/images/train
+val: data/images/val
+nc: 29
+names:
+  0: bicycle
+  1: bus
+  2: car
+  3: carrier
+  4: cat
+  5: dog
+  6: motorcycle
+  7: movable_signage
+  8: person
+  9: scooter
+  10: stroller
+  11: truck
+  12: wheelchair
+  13: barricade
+  14: bench
+  15: bollard
+  16: chair
+  17: fire_hydrant
+  18: kiosk
+  19: parking_meter
+  20: pole
+  21: potted_plant
+  22: power_controller
+  23: stop
+  24: table
+  25: traffic_light
+  26: traffic_light_controller
+  27: traffic_sign
+  28: tree_trunk

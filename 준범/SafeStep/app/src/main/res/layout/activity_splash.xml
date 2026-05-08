@@ -4,144 +4,185 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#141414">
+    android:background="#0A0A0A">
+
+    <!-- ── 상단 로고 영역 ── -->
+
+    <!-- 로고 마크 (주황 수직선 + 원 조합) -->
+    <View
+        android:id="@+id/logoAccentLine"
+        android:layout_width="3dp"
+        android:layout_height="36dp"
+        android:background="#F97316"
+        android:layout_marginBottom="10dp"
+        app:layout_constraintBottom_toTopOf="@id/appName"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed"
+        app:layout_constraintVertical_bias="0.38" />
 
     <!-- 앱 이름 -->
     <TextView
         android:id="@+id/appName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="SafeStep"
+        android:layout_marginTop="14dp"
+        android:text="SAFESTEP"
         android:contentDescription="SafeStep, 시각장애인을 위한 AI 안내 앱"
-        android:textColor="#F97316"
-        android:textSize="48sp"
+        android:textColor="#F5F5F5"
+        android:textSize="34sp"
         android:textStyle="bold"
-        android:letterSpacing="0.05"
+        android:letterSpacing="0.18"
         app:layout_constraintBottom_toTopOf="@id/tagline"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed" />
+        app:layout_constraintTop_toBottomOf="@id/logoAccentLine" />
 
     <!-- 태그라인 -->
     <TextView
         android:id="@+id/tagline"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:text="안전한 발걸음을 위한 AI 안내"
-        android:textColor="#AEAEB2"
-        android:textSize="14sp"
-        app:layout_constraintBottom_toTopOf="@id/modeLabel"
+        android:textColor="#555555"
+        android:textSize="13sp"
+        android:letterSpacing="0.04"
+        app:layout_constraintBottom_toTopOf="@id/urlCard"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/appName" />
 
-    <!-- 서버 URL 레이블 -->
-    <TextView
-        android:id="@+id/serverUrlLabel"
-        android:layout_width="wrap_content"
+    <!-- ── 서버 URL 카드 ── -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/urlCard"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:text="서버 URL"
-        android:textColor="#6E6E73"
-        android:textSize="12sp"
-        app:layout_constraintTop_toBottomOf="@id/tagline"
-        app:layout_constraintStart_toStartOf="@id/serverUrlInput"
-        app:layout_constraintEnd_toEndOf="@id/serverUrlInput" />
-
-    <!-- 서버 URL 입력 -->
-    <EditText
-        android:id="@+id/serverUrlInput"
-        android:layout_width="300dp"
-        android:layout_height="48dp"
-        android:layout_marginTop="4dp"
-        android:hint="http://x.x.x.x:5000/detect"
-        android:textColorHint="#3A3A3C"
-        android:textColor="#EEEEEE"
-        android:textSize="12sp"
-        android:singleLine="true"
-        android:inputType="textUri"
-        android:imeOptions="actionDone"
-        android:background="@null"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:contentDescription="서버 URL 입력. ngrok 또는 로컬 서버 주소를 입력하세요."
-        app:layout_constraintTop_toBottomOf="@id/serverUrlLabel"
+        android:layout_marginTop="40dp"
+        android:layout_marginStart="28dp"
+        android:layout_marginEnd="28dp"
+        app:cardBackgroundColor="#111111"
+        app:cardCornerRadius="14dp"
+        app:cardElevation="0dp"
+        app:layout_constraintBottom_toTopOf="@id/dividerLine"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/tagline">
 
-    <!-- URL 입력 구분선 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SERVER URL"
+                android:textColor="#F97316"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+
+            <EditText
+                android:id="@+id/serverUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="6dp"
+                android:hint="https://xxxx.ngrok-free.app/detect"
+                android:textColorHint="#333333"
+                android:textColor="#DDDDDD"
+                android:textSize="12sp"
+                android:singleLine="true"
+                android:inputType="textUri"
+                android:imeOptions="actionDone"
+                android:background="@null"
+                android:contentDescription="서버 URL 입력. ngrok 또는 로컬 서버 주소를 입력하세요." />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#1E1E1E" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- 구분선 -->
     <View
-        android:id="@+id/serverUrlDivider"
-        android:layout_width="300dp"
+        android:id="@+id/dividerLine"
+        android:layout_width="40dp"
         android:layout_height="1dp"
-        android:background="#F97316"
-        android:alpha="0.5"
-        app:layout_constraintTop_toBottomOf="@id/serverUrlInput"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- 모드 선택 안내 -->
-    <TextView
-        android:id="@+id/modeLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="모드를 선택하세요"
-        android:textColor="#6E6E73"
-        android:textSize="13sp"
+        android:layout_marginTop="36dp"
+        android:background="#222222"
         app:layout_constraintBottom_toTopOf="@id/startButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/serverUrlDivider" />
+        app:layout_constraintTop_toBottomOf="@id/urlCard" />
 
-    <!-- 카메라 모드 버튼 -->
-    <Button
+    <!-- ── 버튼 영역 ── -->
+
+    <!-- 카메라 모드 버튼 (프라이머리) -->
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/startButton"
-        android:layout_width="260dp"
-        android:layout_height="64dp"
-        android:layout_marginTop="12dp"
-        android:text="📷  카메라 모드"
-        android:textColor="#FFFFFF"
-        android:textSize="17sp"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:layout_marginTop="28dp"
+        android:layout_marginStart="28dp"
+        android:layout_marginEnd="28dp"
+        android:text="카메라 모드"
+        android:textColor="#0A0A0A"
+        android:textSize="16sp"
         android:textStyle="bold"
+        android:letterSpacing="0.04"
         android:contentDescription="카메라 모드. 실시간 카메라로 위험 탐지 및 내비게이션을 시작합니다."
         app:backgroundTint="#F97316"
-        app:cornerRadius="32dp"
+        app:cornerRadius="14dp"
+        app:icon="@android:drawable/ic_menu_camera"
+        app:iconTint="#0A0A0A"
+        app:iconGravity="textStart"
+        app:iconPadding="10dp"
         app:layout_constraintBottom_toTopOf="@id/videoTestButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/modeLabel" />
+        app:layout_constraintTop_toBottomOf="@id/dividerLine" />
 
-    <!-- 동영상 테스트 버튼 -->
-    <Button
+    <!-- 동영상 테스트 버튼 (세컨더리) -->
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/videoTestButton"
-        android:layout_width="260dp"
-        android:layout_height="56dp"
-        android:layout_marginTop="14dp"
-        android:text="🎬  동영상 테스트"
-        android:textColor="#F97316"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="0dp"
+        android:layout_height="52dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="28dp"
+        android:layout_marginEnd="28dp"
+        android:text="동영상 테스트"
+        android:textColor="#666666"
+        android:textSize="14sp"
+        android:letterSpacing="0.02"
         android:contentDescription="동영상 테스트 모드. 저장된 동영상으로 탐지를 테스트합니다."
-        app:backgroundTint="#1A1A1A"
-        app:strokeColor="#F97316"
-        app:strokeWidth="2dp"
-        app:cornerRadius="28dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:backgroundTint="#0A0A0A"
+        app:strokeColor="#222222"
+        app:strokeWidth="1dp"
+        app:cornerRadius="14dp"
+        app:layout_constraintBottom_toTopOf="@id/credits"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/startButton" />
 
     <!-- 하단 크레딧 -->
     <TextView
+        android:id="@+id/credits"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        android:text="powered by AI"
-        android:textColor="#3A3A3C"
-        android:textSize="11sp"
+        android:layout_marginBottom="28dp"
+        android:text="powered by AI  ·  SafeStep"
+        android:textColor="#2A2A2A"
+        android:textSize="10sp"
+        android:letterSpacing="0.06"
         android:importantForAccessibility="no"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <title>VisionGuide · 보행 비서</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- ============================================
+         홈 화면 (모드 선택)
+         ============================================ -->
+    <section id="home-screen" class="screen active">
+        <header class="brand">
+            <div class="brand-mark" aria-hidden="true">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <h1 class="brand-name">VisionGuide</h1>
+            <p class="brand-tag">보이지 않는 길을 들려드립니다</p>
+        </header>
+
+        <main class="home-main">
+            <button id="btn-camera-mode" class="mode-btn primary" type="button" aria-label="카메라 실시간 모드 시작">
+                <span class="mode-btn-label">카메라 실시간</span>
+                <span class="mode-btn-desc">스마트폰 카메라로 즉시 안내</span>
+                <span class="mode-btn-arrow" aria-hidden="true">→</span>
+            </button>
+
+            <button id="btn-nav-mode" class="mode-btn secondary" type="button" aria-label="길찾기">
+                <span class="mode-btn-label">길찾기</span>
+                <span class="mode-btn-desc">목적지까지 보행 경로 안내</span>
+                <span class="mode-btn-arrow" aria-hidden="true">→</span>
+            </button>
+        </main>
+
+        <footer class="home-footer">
+            <div class="conn-pill" id="server-status">
+                <span class="conn-dot" data-state="idle"></span>
+                <span class="conn-text">서버 확인 대기</span>
+            </div>
+        </footer>
+    </section>
+
+    <!-- ============================================
+         길찾기 화면
+         ============================================ -->
+    <section id="nav-screen" class="screen">
+        <div class="nav-wrap">
+            <!-- 상단 바 -->
+            <div class="nav-topbar">
+                <button id="btn-nav-back" class="icon-btn" type="button" aria-label="뒤로">
+                    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                        <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </button>
+                <span class="nav-title">길찾기</span>
+                <div style="width:56px"></div>
+            </div>
+
+            <!-- 검색 영역 -->
+            <div class="nav-body">
+                <p class="nav-hint">목적지를 입력하거나 🎤 버튼으로 말씀해주세요</p>
+                <div class="nav-search-field">
+                    <svg class="nav-search-icon" viewBox="0 0 24 24" width="18" height="18">
+                        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <line x1="16.5" y1="16.5" x2="22" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <input type="text" id="nav-dest-input" class="nav-input"
+                           placeholder="목적지 검색" autocomplete="off" autocorrect="off" autocapitalize="off">
+                    <button id="nav-voice-btn" class="nav-voice-btn" type="button" aria-label="음성 입력">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor"/>
+                            <path d="M5 10a7 7 0 0014 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="12" y1="21" x2="12" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- 검색 결과 -->
+                <div id="nav-results" class="nav-results"></div>
+
+                <!-- 경로 카드 -->
+                <div id="nav-route-card" class="nav-route-card hidden">
+                    <div class="nav-route-summary">
+                        <div class="nav-route-item">
+                            <span class="nav-route-label">거리</span>
+                            <span class="nav-route-val" id="nav-route-dist">-</span>
+                        </div>
+                        <div class="nav-route-divider"></div>
+                        <div class="nav-route-item">
+                            <span class="nav-route-label">예상 시간</span>
+                            <span class="nav-route-val" id="nav-route-time">-</span>
+                        </div>
+                    </div>
+                    <div id="nav-steps" class="nav-steps"></div>
+                </div>
+
+                <!-- 지도 미리보기 -->
+                <div id="nav-map-preview" class="nav-map-preview hidden"></div>
+            </div>
+
+            <!-- 하단 버튼 -->
+            <div class="nav-footer">
+                <button id="btn-find-route" class="nav-find-btn" type="button" disabled>경로 찾기</button>
+                <button id="btn-nav-start" class="nav-start-btn hidden" type="button">경로 안내 시작 →</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         카메라 화면
+         ============================================ -->
+    <section id="camera-screen" class="screen">
+        <div class="camera-stage">
+            <video id="camera-video" autoplay playsinline muted></video>
+            <canvas id="capture-canvas" hidden></canvas>
+
+            <!-- 상단 상태 바 -->
+            <div class="cam-topbar">
+                <button id="btn-back" class="icon-btn" type="button" aria-label="뒤로 가기">
+                    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                        <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </button>
+
+                <div class="cam-status">
+                    <span class="cam-status-dot" id="ws-dot" data-state="idle"></span>
+                    <span id="ws-text">대기 중</span>
+                </div>
+
+                <div class="cam-counter" id="frame-counter" aria-live="polite">
+                    <span class="counter-num">0</span>
+                    <span class="counter-label">frames</span>
+                </div>
+            </div>
+
+            <!-- 미니맵 (우상단, 길찾기 중에만 표시) -->
+            <div id="mini-map" class="mini-map hidden"></div>
+
+            <!-- 길안내 바 (길찾기 중에만 표시) -->
+            <div id="nav-bar" class="nav-bar hidden" aria-live="polite">
+                <span class="nav-bar-icon" id="nav-bar-icon">↑</span>
+                <div class="nav-bar-texts">
+                    <span class="nav-bar-text" id="nav-bar-text">안내 준비 중</span>
+                    <span class="nav-bar-dist" id="nav-bar-dist"></span>
+                </div>
+            </div>
+
+            <!-- 하단 컨트롤 -->
+            <div class="cam-bottombar">
+                <div class="latest-message" id="latest-message" aria-live="polite">
+                    <span class="msg-icon" aria-hidden="true">◐</span>
+                    <span class="msg-text">시작 버튼을 눌러주세요</span>
+                </div>
+
+                <button id="btn-toggle" class="capture-btn" type="button" aria-label="전송 시작">
+                    <span class="capture-ring"></span>
+                    <span class="capture-core"></span>
+                    <span class="capture-label" id="capture-label">START</span>
+                </button>
+
+                <div class="cam-meta">
+                    <span id="last-size">-</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 초기 권한 요청용 오버레이 -->
+    <div id="permission-overlay" class="overlay" hidden>
+        <div class="overlay-card">
+            <h2>카메라 권한이 필요합니다</h2>
+            <p id="permission-text">브라우저에서 카메라 사용을 허용해주세요.<br>HTTPS(ngrok) 환경이 아니라면 카메라가 동작하지 않을 수 있습니다.</p>
+            <button id="btn-retry-permission" class="overlay-btn" type="button">다시 시도</button>
+        </div>
+    </div>
+
+    <script src="/static/js/websocket.js" type="module"></script>
+    <script src="/static/js/camera.js" type="module"></script>
+    <script src="/static/js/ui.js" type="module"></script>
+</body>
+</html>

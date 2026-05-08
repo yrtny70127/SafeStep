@@ -41,6 +41,8 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.safestep.app.assistant.AssistantAction
+import com.safestep.app.assistant.VoiceAssistant
 import com.safestep.app.detect.Detection
 import com.safestep.app.detect.ObjectDetector
 import com.safestep.app.detect.RemoteDetector
@@ -129,6 +131,9 @@ class MapActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var currentDest: PoiResult? = null
     /** 경로 이탈 경고 마지막 시각 */
     @Volatile private var lastOffRouteWarnMs = 0L
+
+    // ── Voice Assistant ───────────────────────────────────────────────────────
+    private lateinit var voiceAssistant: VoiceAssistant
 
     // ── Speech ────────────────────────────────────────────────────────────────
     private var speechRecognizer: SpeechRecognizer? = null
@@ -240,6 +245,16 @@ class MapActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .getString(SplashActivity.KEY_SERVER_URL, SplashActivity.DEFAULT_SERVER_URL)
         if (!savedUrl.isNullOrEmpty()) RemoteDetector.SERVER_URL = savedUrl
 
+        // 음성 어시스턴트 — 화면 길게 누르면 활성화
+        val assistantBaseUrl = RemoteDetector.SERVER_URL.trimEnd('/').removeSuffix("/detect")
+        voiceAssistant = VoiceAssistant(
+            activity      = this,
+            serverBaseUrl = assistantBaseUrl,
+            screen        = "map",
+            onAction      = { action -> handleAssistantAction(action) },
+        )
+        voiceAssistant.attachLongPressTo(findViewById(android.R.id.content))
+
         detector       = ObjectDetector.create(this)
         segClient      = SegmentationClient(RemoteDetector.SERVER_URL)
         signalClient   = SignalClient(RemoteDetector.SERVER_URL)
@@ -302,6 +317,7 @@ class MapActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized)
             fusedLocationClient.removeLocationUpdates(locationCallback)
         runCatching { detector.close() }
+        if (::voiceAssistant.isInitialized) voiceAssistant.release()
         super.onDestroy()
     }
 
@@ -1338,6 +1354,129 @@ class MapActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (!serverConnected) {
             tts.speak("서버에 연결할 수 없습니다. 주의하세요.",
                 TextToSpeech.QUEUE_ADD, null, "srv-repeat-${SystemClock.elapsedRealtime()}")
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 음성 어시스턴트 액션 처리
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private fun handleAssistantAction(action: AssistantAction) {
+        when (action) {
+            is AssistantAction.StartNavigation     -> handleDestinationQuery(action.destination)
+            is AssistantAction.CancelNavigation    -> cancelNavigation()
+            is AssistantAction.Reroute             -> rerouteCurrentDestination()
+            is AssistantAction.CurrentLocation     -> speakCurrentLocation()
+            is AssistantAction.RemainingInfo       -> speakRemainingInfo()
+            is AssistantAction.DescribeSurroundings -> speakRecentDetections()
+            is AssistantAction.FindNearbyPoi       -> findAndSpeakPoi(action.category)
+            else -> { /* SpeakOnly 등은 VoiceAssistant가 자동으로 TTS 발화 */ }
+        }
+    }
+
+    /** 내비게이션 취소 */
+    private fun cancelNavigation() {
+        navGuide.stop()
+        allPathPoints = emptyList()
+        currentDest   = null
+        runOnUiThread {
+            routePolyline?.let { mapView.overlays.remove(it) }
+            destMarker?.let    { mapView.overlays.remove(it) }
+            routePolyline = null
+            destMarker    = null
+            mapView.invalidate()
+            navArrow.text        = "↑"
+            navInstruction.text  = ""
+            navDistance.text     = ""
+            navStepCount.text    = ""
+            destinationText.text = "목적지를 말씀해주세요"
+        }
+    }
+
+    /** 현재 목적지로 재탐색 */
+    private fun rerouteCurrentDestination() {
+        val dest = currentDest
+        val loc  = currentLocation
+        if (dest == null) {
+            tts.speak("목적지가 설정되어 있지 않습니다.", TextToSpeech.QUEUE_FLUSH, null, "no-dest")
+            return
+        }
+        if (loc == null) {
+            tts.speak("현재 위치를 가져오는 중입니다.", TextToSpeech.QUEUE_FLUSH, null, "no-loc-reroute")
+            return
+        }
+        tts.speak("재탐색합니다.", TextToSpeech.QUEUE_FLUSH, null, "reroute")
+        fetchRoute(loc.latitude, loc.longitude, dest)
+    }
+
+    /** 현재 위치 TTS 발화 */
+    private fun speakCurrentLocation() {
+        val loc = currentLocation
+        if (loc == null) {
+            tts.speak("현재 위치를 아직 가져오지 못했습니다.", TextToSpeech.QUEUE_FLUSH, null, "no-loc-speak")
+            return
+        }
+        val lat = "%.5f".format(loc.latitude)
+        val lon = "%.5f".format(loc.longitude)
+        tts.speak("현재 위치: 위도 $lat, 경도 $lon", TextToSpeech.QUEUE_FLUSH, null, "cur-loc")
+    }
+
+    /** 잔여 거리/안내 TTS 발화 */
+    private fun speakRemainingInfo() {
+        if (!navGuide.isRunning()) {
+            tts.speak("현재 내비게이션이 실행 중이 아닙니다.", TextToSpeech.QUEUE_FLUSH, null, "no-nav")
+            return
+        }
+        val loc  = currentLocation
+        val step = navGuide.currentStep()
+        if (step == null || loc == null) {
+            tts.speak("잔여 정보를 가져올 수 없습니다.", TextToSpeech.QUEUE_FLUSH, null, "no-remain")
+            return
+        }
+        val dist = navGuide.distToCurrentStep(loc.latitude, loc.longitude)
+        tts.speak(
+            "다음 안내까지 ${formatDist(dist)}. ${step.description}",
+            TextToSpeech.QUEUE_FLUSH, null, "remain-info"
+        )
+    }
+
+    /** 최근 감지된 장애물 TTS 발화 */
+    private fun speakRecentDetections() {
+        val msg = lastSpoken
+        if (msg.isBlank()) {
+            tts.speak("최근 감지된 장애물이 없습니다.", TextToSpeech.QUEUE_FLUSH, null, "no-detect")
+        } else {
+            tts.speak("최근 감지: $msg", TextToSpeech.QUEUE_FLUSH, null, "recent-detect")
+        }
+    }
+
+    /** 주변 카테고리 POI 검색 후 TTS 발화 */
+    private fun findAndSpeakPoi(category: String) {
+        val loc = currentLocation
+        if (loc == null) {
+            tts.speak("현재 위치를 아직 가져오지 못했습니다.", TextToSpeech.QUEUE_FLUSH, null, "no-loc-poi")
+            return
+        }
+        tts.speak("$category 검색합니다.", TextToSpeech.QUEUE_FLUSH, null, "poi-search")
+        TmapService.searchPoi(category) { pois ->
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                if (pois.isEmpty()) {
+                    tts.speak("주변에서 $category 을(를) 찾지 못했습니다.",
+                        TextToSpeech.QUEUE_FLUSH, null, "poi-none")
+                    return@runOnUiThread
+                }
+                val nearest = pois.minByOrNull { p ->
+                    val dLat = (p.lat - loc.latitude) * 111320.0
+                    val dLon = (p.lon - loc.longitude) * 111320.0 *
+                        kotlin.math.cos(Math.toRadians(loc.latitude))
+                    kotlin.math.sqrt(dLat * dLat + dLon * dLon)
+                } ?: pois.first()
+                tts.speak(
+                    "가장 가까운 $category: ${nearest.name}",
+                    TextToSpeech.QUEUE_FLUSH, null, "poi-found"
+                )
+            }
         }
     }
 }

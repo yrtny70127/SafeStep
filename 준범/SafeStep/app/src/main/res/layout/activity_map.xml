@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#141414">
+    android:background="#0A0A0A">
 
     <!-- 화면 50% 가이드라인 -->
     <androidx.constraintlayout.widget.Guideline
@@ -24,12 +24,13 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 오렌지 구분선 -->
+    <!-- 구분선 (얇고 정갈하게) -->
     <View
         android:id="@+id/divider"
         android:layout_width="0dp"
-        android:layout_height="3dp"
+        android:layout_height="1dp"
         android:background="#F97316"
+        android:alpha="0.6"
         app:layout_constraintTop_toTopOf="@id/midGuideline"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -54,7 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:scaleType="fitXY"
-            android:alpha="0.6"
+            android:alpha="0.55"
             android:background="@android:color/transparent" />
 
         <com.safestep.app.BoundingBoxOverlay
@@ -63,19 +64,23 @@
             android:layout_height="match_parent"
             android:background="@android:color/transparent" />
 
-        <!-- 모드 선택으로 돌아가기 버튼 -->
-        <Button
+        <!-- 뒤로가기 버튼 (원형, 좌상단) -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/backToModeButton"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_gravity="top|start"
-            android:layout_margin="8dp"
+            android:layout_margin="12dp"
             android:text="←"
-            android:textSize="20sp"
-            android:textColor="#FFFFFF"
-            android:background="@drawable/btn_orange"
+            android:textSize="16sp"
+            android:textColor="#CCCCCC"
             android:contentDescription="모드 선택으로 돌아가기"
-            android:padding="0dp" />
+            android:padding="0dp"
+            app:backgroundTint="#CC0A0A0A"
+            app:strokeColor="#333333"
+            app:strokeWidth="1dp"
+            app:cornerRadius="20dp" />
 
         <!-- 위험 경고 배너 -->
         <LinearLayout
@@ -83,16 +88,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:background="#F97316"
+            android:background="#EFF97316"
             android:gravity="center"
             android:orientation="horizontal"
-            android:padding="10dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
             android:visibility="gone"
             android:accessibilityLiveRegion="assertive">
 
             <View
-                android:layout_width="8dp"
-                android:layout_height="8dp"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
                 android:layout_marginEnd="10dp"
                 android:background="@drawable/dot_white" />
 
@@ -101,77 +109,92 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="앞에 사람 접근 중"
-                android:textColor="#FFFFFF"
+                android:textColor="#0A0A0A"
                 android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:letterSpacing="0.02" />
 
         </LinearLayout>
 
     </FrameLayout>
 
-    <!-- ── 지도 위: 목적지 입력 바 ──────────────────── -->
-    <LinearLayout
+    <!-- ── 지도 위: 목적지 입력 바 (플로팅 카드) ── -->
+    <androidx.cardview.widget.CardView
         android:id="@+id/destinationBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="#CC141414"
-        android:orientation="horizontal"
-        android:padding="10dp"
-        android:gravity="center_vertical"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="12dp"
+        app:cardBackgroundColor="#E6000000"
+        app:cardCornerRadius="14dp"
+        app:cardElevation="0dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/destinationText"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="목적지를 말씀해주세요"
-            android:textColor="#AEAEB2"
-            android:textSize="14sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:singleLine="true"
-            android:ellipsize="end" />
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:gravity="center_vertical">
 
-        <Button
-            android:id="@+id/destMicButton"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="🎙"
-            android:textSize="18sp"
-            android:contentDescription="목적지 음성 입력"
-            android:background="@drawable/btn_orange"
-            android:padding="0dp" />
+            <TextView
+                android:id="@+id/destinationText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="목적지를 말씀해주세요"
+                android:textColor="#666666"
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:ellipsize="end" />
 
-    </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/destMicButton"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:text="🎙"
+                android:textSize="16sp"
+                android:contentDescription="목적지 음성 입력"
+                android:padding="0dp"
+                app:backgroundTint="#F97316"
+                app:cornerRadius="19dp" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
     <!-- ── 최하단: 내비 안내 카드 ────────────────────── -->
     <LinearLayout
         android:id="@+id/navBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="#F0111111"
+        android:background="#F2000000"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
         android:gravity="center_vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 방향 화살표 아이콘 -->
+        <!-- 방향 화살표 -->
         <TextView
             android:id="@+id/navArrow"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:text="↑"
-            android:textSize="36sp"
+            android:textSize="28sp"
             android:gravity="center"
             android:textColor="#F97316"
-            android:background="#1AF97316"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp" />
+            android:background="#14F97316"
+            android:padding="4dp" />
 
         <!-- 거리 + 안내 문구 -->
         <LinearLayout
@@ -187,7 +210,7 @@
                 android:layout_height="wrap_content"
                 android:text="--"
                 android:textColor="#F97316"
-                android:textSize="28sp"
+                android:textSize="26sp"
                 android:textStyle="bold"
                 android:includeFontPadding="false" />
 
@@ -196,20 +219,21 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="경로를 설정해주세요"
-                android:textColor="#E5E5E7"
-                android:textSize="14sp"
-                android:layout_marginTop="2dp" />
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"
+                android:letterSpacing="0.01" />
 
         </LinearLayout>
 
-        <!-- 단계 표시 (X / Y) -->
+        <!-- 단계 표시 -->
         <TextView
             android:id="@+id/navStepCount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
-            android:textColor="#6E6E73"
-            android:textSize="12sp"
+            android:textColor="#444444"
+            android:textSize="11sp"
             android:gravity="center"
             android:minWidth="36dp" />
 

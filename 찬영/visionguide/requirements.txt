@@ -1,0 +1,40 @@
+# ============================================================
+# VisionGuide - 필수 패키지
+# ============================================================
+# 설치 방법:
+#   pip install -r requirements.txt
+#
+# GPU 사용 시 (속도 대폭 향상 - 강력 권장):
+#   pip uninstall torch torchvision
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# ============================================================
+
+# ── 웹 서버 ─────────────────────────────────────────────────
+fastapi==0.115.0            # FastAPI 웹 프레임워크
+uvicorn[standard]==0.30.6   # ASGI 서버 (FastAPI 실행)
+websockets==13.0.1          # WebSocket (카메라 실시간 전송)
+python-dotenv==1.0.1        # .env 환경변수 로드
+python-multipart            # 파일 업로드 (영상/사진 분석)
+pyngrok                     # ngrok 자동 실행 (스마트폰 외부 접속용)
+requests                    # T-map REST API 호출
+
+# ── AI - Ollama (선택) ───────────────────────────────────────
+# 로컬 LLaMA 모델로 자연어 안내 메시지 생성
+# 없어도 동작하며, 대시보드에서 on/off 가능
+# 사용 시: https://ollama.com/download 설치 후 → ollama pull llama3.2
+ollama
+
+# ── 영상 처리 ────────────────────────────────────────────────
+opencv-python               # 이미지 디코딩, 영상 프레임 추출, HSV 색상 분석
+
+# ── AI - YOLO 추론 ───────────────────────────────────────────
+# 장애물 탐지 + 노면 세그멘테이션
+# 모델 파일(.pt)은 ai_models/ 폴더에 별도 배치 필요
+ultralytics                 # YOLO 모델 로드 및 추론
+
+# ── AI - 거리 추정 (Depth-Anything-V2) ──────────────────────
+# 첫 실행 시 HuggingFace에서 자동 다운로드 (약 100MB, 인터넷 필요)
+# GPU 없으면 프레임당 3~8초로 느림 → GPU 환경 강력 권장
+transformers                # HuggingFace 모델 로드
+Pillow                      # PIL Image 변환 (transformers 입력)
+torch                       # PyTorch (GPU 사용 시 위의 CUDA 버전으로 재설치)

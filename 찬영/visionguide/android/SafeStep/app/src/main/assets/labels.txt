@@ -1,0 +1,9 @@
+person
+bicycle
+car
+motorcycle
+bus
+truck
+chair
+pole
+tree

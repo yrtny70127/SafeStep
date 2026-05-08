@@ -1,0 +1,18 @@
+{
+  "project_name": "final_yolo11n_640_weighted80_rare_safety",
+  "model": "YOLO11n",
+  "imgsz": 640,
+  "batch": 6,
+  "workers": 2,
+  "epochs_configured": 80,
+  "epochs_completed": 60,
+  "precision": 0.79568,
+  "recall": 0.60373,
+  "mAP50": 0.67633,
+  "mAP50_95": 0.47267,
+  "class_29_damaged_manhole_labels": 7544,
+  "class_30_damaged_curb_labels": 53016,
+  "best_pt": "/mnt/d/project/team2_bbox/runs/final_yolo11n_640_weighted80_rare_safety/weights/best.pt",
+  "weighted_train_list": "/mnt/d/project/team2_bbox/reports/from_scratch_weighted80_final/train_rare_safety_weighted.txt",
+  "weighted_yaml": "/mnt/d/project/team2_bbox/reports/from_scratch_weighted80_final/obstacle_rare_safety_weighted_names_list.yaml"
+}
